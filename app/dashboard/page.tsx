@@ -186,6 +186,50 @@ function DashboardPageInner() {
           <>
             <AuditScore score={audit.score} />
 
+            {/* Upgrade Banner */}
+            <div className="mt-6 bg-green-500/10 border border-green-500/30 rounded-xl p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-green-400 font-semibold text-sm mb-1">You&apos;re on the free plan</p>
+                  <p className="text-zinc-400 text-sm">Upgrade to get weekly monitoring, Slack alerts, and full audit history — automatically.</p>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={async () => {
+                    const email = prompt("Enter your email to upgrade:");
+                    if (!email || !portal) return;
+                    const res = await fetch("/api/stripe/checkout", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email, plan: "starter", portal_id: portal.id, hub_id: portal.hub_id }),
+                    });
+                    const data = await res.json();
+                    if (data.url) window.location.href = data.url;
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  Starter — $49/mo
+                </button>
+                <button
+                  onClick={async () => {
+                    const email = prompt("Enter your email to upgrade:");
+                    if (!email || !portal) return;
+                    const res = await fetch("/api/stripe/checkout", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email, plan: "pro", portal_id: portal.id, hub_id: portal.hub_id }),
+                    });
+                    const data = await res.json();
+                    if (data.url) window.location.href = data.url;
+                  }}
+                  className="bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  Pro — $99/mo
+                </button>
+              </div>
+            </div>
+
             <div className="mt-8 space-y-4">
               <h2 className="text-lg font-semibold text-zinc-300">
                 Check Results
