@@ -7,8 +7,7 @@ const redirectUri = () => process.env.HUBSPOT_REDIRECT_URI!;
 
 const SCOPES = [
   "crm.objects.contacts.read",
-  "crm.objects.companies.read",
-  "crm.objects.deals.read",
+  "crm.objects.contacts.write",
   "crm.objects.owners.read",
 ].join(" ");
 
