@@ -199,13 +199,18 @@ function DashboardPageInner() {
                   onClick={async () => {
                     const email = prompt("Enter your email to upgrade:");
                     if (!email || !portal) return;
-                    const res = await fetch("/api/stripe/checkout", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ email, plan: "starter", portal_id: portal.id, hub_id: portal.hub_id }),
-                    });
-                    const data = await res.json();
-                    if (data.url) window.location.href = data.url;
+                    try {
+                      const res = await fetch("/api/stripe/checkout", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ email, plan: "starter", portal_id: portal.id, hub_id: portal.hub_id }),
+                      });
+                      const data = await res.json();
+                      if (data.url) window.location.href = data.url;
+                      else alert("Error: " + (data.error || "No checkout URL returned"));
+                    } catch (e) {
+                      alert("Checkout failed: " + e);
+                    }
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
                 >
@@ -215,13 +220,18 @@ function DashboardPageInner() {
                   onClick={async () => {
                     const email = prompt("Enter your email to upgrade:");
                     if (!email || !portal) return;
-                    const res = await fetch("/api/stripe/checkout", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ email, plan: "pro", portal_id: portal.id, hub_id: portal.hub_id }),
-                    });
-                    const data = await res.json();
-                    if (data.url) window.location.href = data.url;
+                    try {
+                      const res = await fetch("/api/stripe/checkout", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ email, plan: "pro", portal_id: portal.id, hub_id: portal.hub_id }),
+                      });
+                      const data = await res.json();
+                      if (data.url) window.location.href = data.url;
+                      else alert("Error: " + (data.error || "No checkout URL returned"));
+                    } catch (e) {
+                      alert("Checkout failed: " + e);
+                    }
                   }}
                   className="bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
                 >
