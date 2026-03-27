@@ -164,7 +164,8 @@ export async function checkMissingLifecycleStage(accessToken: string, total: num
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function checkUnassignedNewLeads(accessToken: string, _total: number): Promise<CheckResult> {
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  // HubSpot search API requires timestamps in milliseconds as strings
+  const sevenDaysAgo = String(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   const searchRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
     method: "POST",
@@ -221,7 +222,8 @@ export async function checkUnassignedNewLeads(accessToken: string, _total: numbe
   const totalNewData = totalNewRes.ok ? await totalNewRes.json() : { total: 0 };
   const totalNew = totalNewData.total ?? 0;
   const count = searchData.total ?? 0;
-  const percentage = totalNew > 0 ? (count / totalNew) * 100 : 0;
+  // If totalNew is 0 but count > 0, treat as 100% affected
+  const percentage = totalNew > 0 ? (count / totalNew) * 100 : count > 0 ? 100 : 0;
 
   return {
     checkName: "Unassigned New Leads (7d)",
