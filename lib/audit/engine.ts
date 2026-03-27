@@ -231,7 +231,7 @@ export async function checkUnassignedNewLeads(accessToken: string, _total: numbe
     count,
     percentage: Math.round(percentage * 100) / 100,
     status: toStatus(percentage, 15, 30),
-    description: `${count} of ${totalNew} contacts created in the last 7 days have no owner.`,
+    description: `${count} of ${totalNew > 0 ? totalNew : count} contacts created in the last 7 days have no owner.`,
     fixSteps: [
       "Set up lead rotation workflows for immediate assignment",
       "Create SLA alerts for unassigned leads older than 24 hours",
