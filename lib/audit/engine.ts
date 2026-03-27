@@ -37,7 +37,7 @@ function toStatus(percentage: number, warnThreshold: number, failThreshold: numb
   return "pass" as const;
 }
 
-export async function checkDuplicateContacts(accessToken: string): Promise<CheckResult> {
+export async function checkDuplicateContacts(accessToken: string, total: number): Promise<CheckResult> {
   // Search for contacts grouped by email to find duplicates
   const data = await hubspotGet("/crm/v3/objects/contacts", accessToken, {
     limit: "100",
@@ -55,7 +55,6 @@ export async function checkDuplicateContacts(accessToken: string): Promise<Check
     seen.add(email);
   }
 
-  const total = await getTotalContacts(accessToken);
   const count = dupes.size;
   const percentage = total > 0 ? (count / total) * 100 : 0;
 
@@ -74,7 +73,7 @@ export async function checkDuplicateContacts(accessToken: string): Promise<Check
   };
 }
 
-export async function checkMissingOwner(accessToken: string): Promise<CheckResult> {
+export async function checkMissingOwner(accessToken: string, total: number): Promise<CheckResult> {
   // Note: initial fetch not needed here, using search API directly below
 
   // Use search API to filter for contacts with no owner
@@ -102,7 +101,6 @@ export async function checkMissingOwner(accessToken: string): Promise<CheckResul
   if (!searchRes.ok) throw new Error("Search API failed for missing owner check");
   const searchData = await searchRes.json();
 
-  const total = await getTotalContacts(accessToken);
   const count = searchData.total ?? 0;
   const percentage = total > 0 ? (count / total) * 100 : 0;
 
@@ -121,7 +119,7 @@ export async function checkMissingOwner(accessToken: string): Promise<CheckResul
   };
 }
 
-export async function checkMissingLifecycleStage(accessToken: string): Promise<CheckResult> {
+export async function checkMissingLifecycleStage(accessToken: string, total: number): Promise<CheckResult> {
   const searchRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
     method: "POST",
     headers: {
@@ -146,7 +144,6 @@ export async function checkMissingLifecycleStage(accessToken: string): Promise<C
   if (!searchRes.ok) throw new Error("Search API failed for lifecycle stage check");
   const searchData = await searchRes.json();
 
-  const total = await getTotalContacts(accessToken);
   const count = searchData.total ?? 0;
   const percentage = total > 0 ? (count / total) * 100 : 0;
 
@@ -165,7 +162,8 @@ export async function checkMissingLifecycleStage(accessToken: string): Promise<C
   };
 }
 
-export async function checkUnassignedNewLeads(accessToken: string): Promise<CheckResult> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function checkUnassignedNewLeads(accessToken: string, _total: number): Promise<CheckResult> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const searchRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
@@ -240,7 +238,7 @@ export async function checkUnassignedNewLeads(accessToken: string): Promise<Chec
   };
 }
 
-export async function checkUTMGaps(accessToken: string): Promise<CheckResult> {
+export async function checkUTMGaps(accessToken: string, total: number): Promise<CheckResult> {
   const searchRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
     method: "POST",
     headers: {
@@ -274,7 +272,6 @@ export async function checkUTMGaps(accessToken: string): Promise<CheckResult> {
   if (!searchRes.ok) throw new Error("Search API failed for UTM gaps check");
   const searchData = await searchRes.json();
 
-  const total = await getTotalContacts(accessToken);
   const count = searchData.total ?? 0;
   const percentage = total > 0 ? (count / total) * 100 : 0;
 
@@ -294,12 +291,15 @@ export async function checkUTMGaps(accessToken: string): Promise<CheckResult> {
 }
 
 export async function runAllChecks(accessToken: string): Promise<CheckResult[]> {
+  // Fetch total once upfront and inject into checks that need it
+  const total = await getTotalContacts(accessToken);
+
   const results = await Promise.allSettled([
-    checkDuplicateContacts(accessToken),
-    checkMissingOwner(accessToken),
-    checkMissingLifecycleStage(accessToken),
-    checkUnassignedNewLeads(accessToken),
-    checkUTMGaps(accessToken),
+    checkDuplicateContacts(accessToken, total),
+    checkMissingOwner(accessToken, total),
+    checkMissingLifecycleStage(accessToken, total),
+    checkUnassignedNewLeads(accessToken, total),
+    checkUTMGaps(accessToken, total),
   ]);
 
   return results
