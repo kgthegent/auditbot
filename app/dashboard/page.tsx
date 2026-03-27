@@ -30,6 +30,11 @@ function DashboardPageInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [emailCaptured, setEmailCaptured] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+  const [emailInput, setEmailInput] = useState("");
+  const [emailSubmitting, setEmailSubmitting] = useState(false);
+
   const runAudit = useCallback(async (portalId: string) => {
     setLoading(true);
     setError(null);
@@ -52,6 +57,27 @@ function DashboardPageInner() {
     }
   }, []);
 
+  const handleEmailSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailInput || !portal) return;
+    setEmailSubmitting(true);
+    try {
+      const res = await fetch("/api/users/capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailInput, portal_id: portal.id }),
+      });
+      if (!res.ok) throw new Error("Failed to save email");
+      setUserEmail(emailInput);
+      setEmailCaptured(true);
+      runAudit(portal.id);
+    } catch {
+      setError("Failed to save email. Please try again.");
+    } finally {
+      setEmailSubmitting(false);
+    }
+  }, [emailInput, portal, runAudit]);
+
   useEffect(() => {
     if (!hubId) {
       setPortalLoading(false);
@@ -70,7 +96,6 @@ function DashboardPageInner() {
         const data: PortalData = await res.json();
         setPortal(data);
         setPortalLoading(false);
-        runAudit(data.id);
       } catch {
         setPortalError("Failed to load portal");
         setPortalLoading(false);
@@ -78,7 +103,7 @@ function DashboardPageInner() {
     }
 
     fetchPortal();
-  }, [hubId, runAudit]);
+  }, [hubId]);
 
   if (portalLoading) {
     return (
@@ -129,6 +154,70 @@ function DashboardPageInner() {
       </div>
     );
   }
+
+  if (!emailCaptured) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white">
+        <nav className="border-b border-zinc-800 px-6 py-4">
+          <div className="max-w-5xl mx-auto flex items-center justify-between">
+            <a href="/" className="text-xl font-bold text-green-500">
+              AuditBot
+            </a>
+          </div>
+        </nav>
+        <main className="max-w-md mx-auto px-6 py-24">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center">
+            <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-5">
+              <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold mb-2">Enter your email to see your free HubSpot audit</h2>
+            <p className="text-zinc-400 text-sm mb-6">We&apos;ll run a full health check on your portal — no credit card required.</p>
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-3 mb-4 text-sm">
+                {error}
+              </div>
+            )}
+            <form onSubmit={handleEmailSubmit}>
+              <input
+                type="email"
+                required
+                placeholder="you@company.com"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-colors mb-4"
+              />
+              <button
+                type="submit"
+                disabled={emailSubmitting}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-colors"
+              >
+                {emailSubmitting ? "Loading..." : "Get My Free Audit"}
+              </button>
+            </form>
+            <p className="text-zinc-600 text-xs mt-4">No spam. We&apos;ll only email you about your audit results.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const handleCheckout = async (plan: "starter" | "pro") => {
+    if (!portal) return;
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail, plan, portal_id: portal.id, hub_id: portal.hub_id }),
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+      else alert("Error: " + (data.error || "No checkout URL returned"));
+    } catch (e) {
+      alert("Checkout failed: " + e);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -196,43 +285,13 @@ function DashboardPageInner() {
               </div>
               <div className="flex gap-3 mt-4">
                 <button
-                  onClick={async () => {
-                    const email = prompt("Enter your email to upgrade:");
-                    if (!email || !portal) return;
-                    try {
-                      const res = await fetch("/api/stripe/checkout", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ email, plan: "starter", portal_id: portal.id, hub_id: portal.hub_id }),
-                      });
-                      const data = await res.json();
-                      if (data.url) window.location.href = data.url;
-                      else alert("Error: " + (data.error || "No checkout URL returned"));
-                    } catch (e) {
-                      alert("Checkout failed: " + e);
-                    }
-                  }}
+                  onClick={() => handleCheckout("starter")}
                   className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
                 >
                   Starter — $49/mo
                 </button>
                 <button
-                  onClick={async () => {
-                    const email = prompt("Enter your email to upgrade:");
-                    if (!email || !portal) return;
-                    try {
-                      const res = await fetch("/api/stripe/checkout", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ email, plan: "pro", portal_id: portal.id, hub_id: portal.hub_id }),
-                      });
-                      const data = await res.json();
-                      if (data.url) window.location.href = data.url;
-                      else alert("Error: " + (data.error || "No checkout URL returned"));
-                    } catch (e) {
-                      alert("Checkout failed: " + e);
-                    }
-                  }}
+                  onClick={() => handleCheckout("pro")}
                   className="bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
                 >
                   Pro — $99/mo
