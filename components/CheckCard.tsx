@@ -20,9 +20,15 @@ const STATUS_COLOR = {
   fail: "text-red-400",
 };
 
+const CARD_BORDER = {
+  pass: "border-zinc-800",
+  warn: "border-yellow-500/30",
+  fail: "border-red-500/40",
+};
+
 export default function CheckCard({ check }: { check: CheckResult }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+    <div className={`bg-zinc-900 border ${CARD_BORDER[check.status]} rounded-xl p-6`}>
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
           <span className={`text-xl ${STATUS_COLOR[check.status]}`}>

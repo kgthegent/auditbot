@@ -18,7 +18,16 @@ async function hubspotGet(path: string, accessToken: string, params?: Record<str
 }
 
 async function getTotalContacts(accessToken: string): Promise<number> {
-  const data = await hubspotGet("/crm/v3/objects/contacts", accessToken, { limit: "1" });
+  const res = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ filterGroups: [], limit: 1 }),
+  });
+  if (!res.ok) return 0;
+  const data = await res.json();
   return data.total ?? 0;
 }
 
