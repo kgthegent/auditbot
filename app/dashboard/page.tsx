@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AuditScore from "@/components/AuditScore";
 import CheckCard from "@/components/CheckCard";
@@ -12,7 +12,7 @@ interface AuditData {
   checks: CheckResult[];
 }
 
-export default function DashboardPage() {
+function DashboardPageInner() {
   const searchParams = useSearchParams();
   const hubId = searchParams.get("hub_id");
 
@@ -122,5 +122,13 @@ export default function DashboardPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DashboardPageInner />
+    </Suspense>
   );
 }

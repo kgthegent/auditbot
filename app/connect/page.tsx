@@ -1,9 +1,10 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import ConnectButton from "@/components/ConnectButton";
 
-export default function ConnectPage() {
+function ConnectPageInner() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
 
@@ -57,5 +58,13 @@ export default function ConnectPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function ConnectPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ConnectPageInner />
+    </Suspense>
   );
 }

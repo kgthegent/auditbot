@@ -11,7 +11,7 @@ interface AuditRecord {
 }
 
 export default function HistoryPage() {
-  const [audits, setAudits] = useState<AuditRecord[]>([]);
+  const [audits] = useState<AuditRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

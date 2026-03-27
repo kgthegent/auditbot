@@ -66,7 +66,7 @@ export async function checkDuplicateContacts(accessToken: string): Promise<Check
 }
 
 export async function checkMissingOwner(accessToken: string): Promise<CheckResult> {
-  const data = await hubspotGet("/crm/v3/objects/contacts/search", accessToken);
+  // Note: initial fetch not needed here, using search API directly below
 
   // Use search API to filter for contacts with no owner
   const searchRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
