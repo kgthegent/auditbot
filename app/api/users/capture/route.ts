@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/client";
+import { triggerSequence } from "@/lib/email/sequence";
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,6 +39,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Failed to link portal" },
         { status: 500 }
+      );
+    }
+
+    // Trigger email drip sequence
+    // Get hub_id and audit score for the portal
+    const { data: portal } = await supabaseAdmin
+      .from("portals")
+      .select("hub_id")
+      .eq("id", portal_id)
+      .single();
+
+    if (portal?.hub_id) {
+      // Get latest audit score if available
+      const { data: audit } = await supabaseAdmin
+        .from("audits")
+        .select("score")
+        .eq("portal_id", portal_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      const auditScore = audit?.score ?? 0;
+
+      triggerSequence(email, portal_id, portal.hub_id, auditScore).catch(
+        (err) => console.error("Email sequence trigger failed:", err)
       );
     }
 

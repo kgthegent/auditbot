@@ -39,8 +39,22 @@ create table if not exists audit_checks (
   fix_steps jsonb not null default '[]'
 );
 
+create table if not exists email_sequences (
+  id uuid primary key default gen_random_uuid(),
+  user_email text not null,
+  portal_id uuid references portals(id) on delete cascade,
+  hub_id text not null,
+  audit_score integer,
+  step integer not null default 0,
+  created_at timestamptz default now(),
+  next_send_at timestamptz,
+  completed boolean default false,
+  unique(user_email, portal_id)
+);
+
 -- Indexes
 create index if not exists idx_portals_user_id on portals(user_id);
 create index if not exists idx_audits_portal_id on audits(portal_id);
 create index if not exists idx_audits_created_at on audits(created_at desc);
 create index if not exists idx_audit_checks_audit_id on audit_checks(audit_id);
+create index if not exists idx_email_sequences_next_send on email_sequences(next_send_at) where completed = false;
