@@ -155,7 +155,8 @@ function DashboardPageInner() {
               </p>
               <a
                 href="/connect"
-                className="inline-block bg-brand hover:bg-brand-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                className="inline-block text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                style={{ backgroundColor: '#FF7A59' }}
               >
                 Connect HubSpot
               </a>
