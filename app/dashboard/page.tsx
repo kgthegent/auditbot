@@ -121,14 +121,14 @@ function DashboardPageInner() {
       <div className="min-h-screen bg-zinc-950 text-white">
         <nav className="border-b border-zinc-800 px-6 py-4">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <a href="/" className="text-xl font-bold text-green-500">
+            <a href="/" className="text-xl font-bold text-brand">
               AuditBot
             </a>
           </div>
         </nav>
         <main className="max-w-3xl mx-auto px-6 py-12">
           <div className="text-center py-20">
-            <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+            <div className="inline-block w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
             <p className="text-zinc-500 mt-4">Loading portal...</p>
           </div>
         </main>
@@ -141,7 +141,7 @@ function DashboardPageInner() {
       <div className="min-h-screen bg-zinc-950 text-white">
         <nav className="border-b border-zinc-800 px-6 py-4">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <a href="/" className="text-xl font-bold text-green-500">
+            <a href="/" className="text-xl font-bold text-brand">
               AuditBot
             </a>
           </div>
@@ -155,7 +155,7 @@ function DashboardPageInner() {
               </p>
               <a
                 href="/connect"
-                className="inline-block bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                className="inline-block bg-brand hover:bg-brand-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
               >
                 Connect HubSpot
               </a>
@@ -171,15 +171,15 @@ function DashboardPageInner() {
       <div className="min-h-screen bg-zinc-950 text-white">
         <nav className="border-b border-zinc-800 px-6 py-4">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <a href="/" className="text-xl font-bold text-green-500">
+            <a href="/" className="text-xl font-bold text-brand">
               AuditBot
             </a>
           </div>
         </nav>
         <main className="max-w-md mx-auto px-6 py-24">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center">
-            <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-5">
-              <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className="w-12 h-12 bg-brand/10 rounded-full flex items-center justify-center mx-auto mb-5">
+              <svg className="w-6 h-6 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </div>
@@ -197,12 +197,12 @@ function DashboardPageInner() {
                 placeholder="you@company.com"
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-colors mb-4"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors mb-4"
               />
               <button
                 type="submit"
                 disabled={emailSubmitting}
-                className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-colors"
+                className="w-full bg-brand hover:bg-brand-hover disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-colors"
               >
                 {emailSubmitting ? "Loading..." : "Get My Free Audit"}
               </button>
@@ -234,7 +234,7 @@ function DashboardPageInner() {
     <div className="min-h-screen bg-zinc-950 text-white">
       <nav className="border-b border-zinc-800 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <a href="/" className="text-xl font-bold text-green-500">
+          <a href="/" className="text-xl font-bold text-brand">
             AuditBot
           </a>
           <div className="flex items-center gap-4">
@@ -261,7 +261,7 @@ function DashboardPageInner() {
               if (portal) runAudit(portal.id);
             }}
             disabled={loading}
-            className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            className="bg-brand hover:bg-brand-hover disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
           >
             {loading ? "Running Audit..." : "Run Audit"}
           </button>
@@ -275,7 +275,7 @@ function DashboardPageInner() {
 
         {loading && (
           <div className="text-center py-20">
-            <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+            <div className="inline-block w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
             <p className="text-zinc-500 mt-4">
               Scanning your HubSpot portal...
             </p>
@@ -287,17 +287,17 @@ function DashboardPageInner() {
             <AuditScore score={audit.score} />
 
             {/* Upgrade Banner */}
-            <div className="mt-6 bg-green-500/10 border border-green-500/30 rounded-xl p-5">
+            <div className="mt-6 bg-brand/10 border border-brand/30 rounded-xl p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-green-400 font-semibold text-sm mb-1">You&apos;re on the free plan</p>
+                  <p className="text-brand font-semibold text-sm mb-1">You&apos;re on the free plan</p>
                   <p className="text-zinc-400 text-sm">Upgrade to get weekly monitoring, Slack alerts, and full audit history — automatically.</p>
                 </div>
               </div>
               <div className="flex gap-3 mt-4">
                 <button
                   onClick={() => handleCheckout("starter")}
-                  className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                  className="bg-brand hover:bg-brand-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
                 >
                   Starter — $49/mo
                 </button>

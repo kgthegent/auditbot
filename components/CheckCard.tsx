@@ -15,7 +15,7 @@ const STATUS_ICON = {
 };
 
 const STATUS_COLOR = {
-  pass: "text-green-400",
+  pass: "text-brand",
   warn: "text-yellow-400",
   fail: "text-red-400",
 };
@@ -62,7 +62,7 @@ export default function CheckCard({ check }: { check: CheckResult }) {
           <ul className="space-y-1">
             {check.fixSteps.map((step, i) => (
               <li key={i} className="text-sm text-zinc-400 flex gap-2">
-                <span className="text-green-500 shrink-0">{i + 1}.</span>
+                <span className="text-brand shrink-0">{i + 1}.</span>
                 {step}
               </li>
             ))}

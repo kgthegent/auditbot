@@ -6,7 +6,7 @@ export default function Home() {
       {/* Nav */}
       <nav className="border-b border-zinc-800 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <span className="text-xl font-bold text-green-500">AuditBot</span>
+          <span className="text-xl font-bold text-brand">AuditBot</span>
           <a
             href="https://village-consulting.com"
             className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -21,7 +21,7 @@ export default function Home() {
         <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6">
           Your HubSpot is
           <br />
-          <span className="text-green-500">probably a mess.</span>
+          <span className="text-brand">probably a mess.</span>
         </h1>
         <p className="text-xl text-zinc-400 mb-10 max-w-xl mx-auto">
           AuditBot scans your CRM in seconds and gives you a health score with

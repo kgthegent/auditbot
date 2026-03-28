@@ -17,7 +17,7 @@ function SuccessPageInner() {
         </p>
         <a
           href={hubId ? `/dashboard?hub_id=${hubId}` : "/dashboard"}
-          className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors inline-block"
+          className="bg-brand hover:bg-brand-hover text-white font-semibold px-6 py-3 rounded-lg transition-colors inline-block"
         >
           View Your Dashboard →
         </a>

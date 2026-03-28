@@ -22,7 +22,7 @@ export default function AuditScore({ score, previousScore }: AuditScoreProps) {
         {trend !== null && (
           <span
             className={`text-2xl ${
-              trend > 0 ? "text-green-400" : trend < 0 ? "text-red-400" : "text-zinc-500"
+              trend > 0 ? "text-brand" : trend < 0 ? "text-red-400" : "text-zinc-500"
             }`}
           >
             {trend > 0 ? "↑" : trend < 0 ? "↓" : "→"}

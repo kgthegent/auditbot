@@ -24,7 +24,7 @@ export default function HistoryPage() {
     <div className="min-h-screen bg-zinc-950 text-white">
       <nav className="border-b border-zinc-800 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <a href="/" className="text-xl font-bold text-green-500">
+          <a href="/" className="text-xl font-bold text-brand">
             AuditBot
           </a>
           <a
@@ -41,7 +41,7 @@ export default function HistoryPage() {
 
         {loading && (
           <div className="text-center py-20">
-            <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+            <div className="inline-block w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
@@ -50,7 +50,7 @@ export default function HistoryPage() {
             <p className="text-lg">No audits yet</p>
             <p className="text-sm mt-2">
               Run your first audit from the{" "}
-              <a href="/dashboard" className="text-green-500 hover:underline">
+              <a href="/dashboard" className="text-brand hover:underline">
                 dashboard
               </a>
             </p>
@@ -88,7 +88,7 @@ export default function HistoryPage() {
                         <span
                           className={`text-sm ${
                             trend > 0
-                              ? "text-green-400"
+                              ? "text-brand"
                               : trend < 0
                               ? "text-red-400"
                               : "text-zinc-500"

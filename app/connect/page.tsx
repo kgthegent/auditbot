@@ -12,7 +12,7 @@ function ConnectPageInner() {
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
       <nav className="border-b border-zinc-800 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <a href="/" className="text-xl font-bold text-green-500">
+          <a href="/" className="text-xl font-bold text-brand">
             AuditBot
           </a>
         </div>
@@ -50,7 +50,7 @@ function ConnectPageInner() {
                 key={scope}
                 className="flex items-center gap-2 text-sm text-zinc-400"
               >
-                <span className="text-green-500">&#10003;</span>
+                <span className="text-brand">&#10003;</span>
                 {scope}
               </div>
             ))}
