@@ -30,8 +30,18 @@ function DashboardPageInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [emailCaptured, setEmailCaptured] = useState(false);
-  const [userEmail, setUserEmail] = useState("");
+  const [emailCaptured, setEmailCaptured] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    const hid = params.get("hub_id");
+    return hid ? !!localStorage.getItem(`auditbot_email_${hid}`) : false;
+  });
+  const [userEmail, setUserEmail] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const params = new URLSearchParams(window.location.search);
+    const hid = params.get("hub_id");
+    return hid ? localStorage.getItem(`auditbot_email_${hid}`) || "" : "";
+  });
   const [emailInput, setEmailInput] = useState("");
   const [emailSubmitting, setEmailSubmitting] = useState(false);
 
@@ -70,6 +80,7 @@ function DashboardPageInner() {
       if (!res.ok) throw new Error("Failed to save email");
       setUserEmail(emailInput);
       setEmailCaptured(true);
+      if (hubId) localStorage.setItem(`auditbot_email_${hubId}`, emailInput);
       runAudit(portal.id);
     } catch {
       setError("Failed to save email. Please try again.");
