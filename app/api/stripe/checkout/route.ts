@@ -13,11 +13,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
     }
 
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json(
+        { error: "Stripe is not configured. Set STRIPE_SECRET_KEY in your environment." },
+        { status: 503 }
+      );
+    }
+
     const session = await createCheckoutSession(email, plan, portal_id, hub_id);
     return NextResponse.json({ url: session.url });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Stripe checkout error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: `Stripe error: ${message}` },
+      { status: 500 }
+    );
   }
 }

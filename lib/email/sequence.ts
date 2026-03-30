@@ -35,7 +35,7 @@ export async function triggerSequence(
   hubId: string,
   auditScore: number
 ) {
-  // Create sequence row
+  // Upsert sequence row — resets the sequence if email+portal already exists
   const { error } = await supabaseAdmin.from("email_sequences").upsert(
     {
       user_email: email,
@@ -43,10 +43,10 @@ export async function triggerSequence(
       hub_id: hubId,
       audit_score: auditScore,
       step: 0,
-      next_send_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // step 1 in 1 day
+      next_send_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       completed: false,
     },
-    { onConflict: "user_email,portal_id" }
+    { onConflict: "user_email,portal_id", ignoreDuplicates: false }
   );
 
   if (error) {
@@ -54,13 +54,28 @@ export async function triggerSequence(
     throw error;
   }
 
-  // Send step 0 immediately
-  const html = getEmailHtml(0, email, hubId, auditScore);
+  // Send step 0 (score results) immediately
+  const html0 = getEmailHtml(0, email, hubId, auditScore);
   await sendEmail(
     email,
     `Your HubSpot hygiene score: ${auditScore}/100`,
-    html
+    html0
   );
+
+  // Send step 1 (follow-up) immediately — don't wait for drip cron
+  const html1 = getEmailHtml(1, email, hubId, auditScore);
+  const subject1 = getSubjectForStep(1, auditScore);
+  await sendEmail(email, subject1, html1);
+
+  // Update sequence to step 1, schedule step 2 for +2 days
+  await supabaseAdmin
+    .from("email_sequences")
+    .update({
+      step: 1,
+      next_send_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+    })
+    .eq("user_email", email)
+    .eq("portal_id", portalId);
 }
 
 export function getEmailHtml(

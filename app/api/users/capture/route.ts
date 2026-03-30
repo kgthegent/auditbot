@@ -13,10 +13,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Upsert user by email
+    // Upsert user by email — fully idempotent for re-submissions
     const { data: user, error: userError } = await supabaseAdmin
       .from("users")
-      .upsert({ email }, { onConflict: "email" })
+      .upsert({ email }, { onConflict: "email", ignoreDuplicates: false })
       .select("id")
       .single();
 
