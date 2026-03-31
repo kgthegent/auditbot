@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { getScoreColor, getScoreLabel } from "@/lib/audit/score";
 
 interface AuditRecord {
@@ -10,25 +12,43 @@ interface AuditRecord {
   completed_at: string | null;
 }
 
-export default function HistoryPage() {
-  const [audits] = useState<AuditRecord[]>([]);
+function HistoryPageInner() {
+  const searchParams = useSearchParams();
+  const portalId = searchParams.get("portal_id");
+  const hubId = searchParams.get("hub_id");
+
+  const [audits, setAudits] = useState<AuditRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // In production, fetch from an API endpoint filtered by portal
-    // Placeholder to show the UI structure
-    setLoading(false);
-  }, []);
+    if (!portalId) {
+      setLoading(false);
+      setError("No portal selected.");
+      return;
+    }
+
+    fetch(`/api/audit/history?portal_id=${portalId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error);
+        setAudits(data.audits);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [portalId]);
+
+  const dashboardHref = hubId ? `/dashboard?hub_id=${hubId}` : "/dashboard";
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <nav className="border-b border-zinc-800 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <a href="/" className="text-xl font-bold text-brand">
-            AuditBot
+            StackAudit
           </a>
           <a
-            href="/dashboard"
+            href={dashboardHref}
             className="text-sm text-zinc-400 hover:text-white transition-colors"
           >
             Back to Dashboard
@@ -45,19 +65,25 @@ export default function HistoryPage() {
           </div>
         )}
 
-        {!loading && audits.length === 0 && (
+        {!loading && error && (
+          <div className="text-center py-20 text-red-400">
+            <p>{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && audits.length === 0 && (
           <div className="text-center py-20 text-zinc-600">
             <p className="text-lg">No audits yet</p>
             <p className="text-sm mt-2">
               Run your first audit from the{" "}
-              <a href="/dashboard" className="text-brand hover:underline">
+              <a href={dashboardHref} className="text-brand hover:underline">
                 dashboard
               </a>
             </p>
           </div>
         )}
 
-        {!loading && audits.length > 0 && (
+        {!loading && !error && audits.length > 0 && (
           <div className="space-y-3">
             {audits.map((audit, i) => {
               const prev = audits[i + 1];
@@ -65,7 +91,7 @@ export default function HistoryPage() {
               return (
                 <a
                   key={audit.id}
-                  href={`/dashboard?audit_id=${audit.id}`}
+                  href={`/dashboard?audit_id=${audit.id}&hub_id=${hubId}`}
                   className="block bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors"
                 >
                   <div className="flex items-center justify-between">
@@ -117,5 +143,19 @@ export default function HistoryPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function HistoryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+          <div className="inline-block w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <HistoryPageInner />
+    </Suspense>
   );
 }

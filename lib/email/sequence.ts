@@ -5,8 +5,9 @@ const FROM_INBOX = "auditbot@agentmail.to";
 const APP_URL = "https://auditbot-zeta.vercel.app";
 
 export async function sendEmail(to: string, subject: string, htmlBody: string) {
+  const encodedInbox = encodeURIComponent(FROM_INBOX);
   const res = await fetch(
-    `https://api.agentmail.to/v0/inboxes/${FROM_INBOX}/messages`,
+    `https://api.agentmail.to/v0/inboxes/${encodedInbox}/messages/send`,
     {
       method: "POST",
       headers: {
@@ -14,7 +15,7 @@ export async function sendEmail(to: string, subject: string, htmlBody: string) {
         Authorization: `Bearer ${AGENTMAIL_API_KEY}`,
       },
       body: JSON.stringify({
-        to: [{ email: to }],
+        to: [to],
         subject,
         html: htmlBody,
       }),
@@ -94,7 +95,7 @@ export function getEmailHtml(
 
   const footer = `
     <div style="padding:24px;text-align:center;color:#999999;font-size:12px;border-top:1px solid #eeeeee;">
-      AuditBot by Village Consulting · <a href="${APP_URL}/unsubscribe?email=${encodeURIComponent(email)}" style="color:#999999;">Unsubscribe</a>
+      StackAudit by Village Consulting · <a href="${APP_URL}/unsubscribe?email=${encodeURIComponent(email)}" style="color:#999999;">Unsubscribe</a>
     </div>`;
 
   const cta = (text: string, url: string) =>
@@ -143,7 +144,7 @@ export function getEmailHtml(
         <p style="color:#444444;font-size:15px;line-height:1.7;">
           These are the silent killers of pipeline velocity. The good news: they are all fixable.
         </p>
-        ${cta("Fix It With AuditBot Starter — $49/mo", upgradeUrl)}
+        ${cta("Fix It With StackAudit Starter — $49/mo", upgradeUrl)}
       `);
 
     case 2:

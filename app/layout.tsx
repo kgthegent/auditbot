@@ -14,7 +14,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "AuditBot — HubSpot CRM Health Monitoring",
+  title: "StackAudit — HubSpot CRM Health Monitoring",
   description:
     "Automated CRM hygiene monitoring for HubSpot. Get a health score and actionable fixes in seconds.",
 };

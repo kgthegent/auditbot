@@ -13,7 +13,7 @@ function ConnectPageInner() {
       <nav className="border-b border-zinc-800 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <a href="/" className="text-xl font-bold text-brand">
-            AuditBot
+            StackAudit
           </a>
         </div>
       </nav>

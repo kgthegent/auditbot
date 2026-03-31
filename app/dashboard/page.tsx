@@ -16,6 +16,7 @@ interface PortalData {
   id: string;
   hub_id: string;
   portal_name: string;
+  plan: "free" | "starter" | "pro";
 }
 
 function DashboardPageInner() {
@@ -34,16 +35,30 @@ function DashboardPageInner() {
     if (typeof window === "undefined") return false;
     const params = new URLSearchParams(window.location.search);
     const hid = params.get("hub_id");
-    return hid ? !!localStorage.getItem(`auditbot_email_${hid}`) : false;
+    return hid ? !!localStorage.getItem(`stackaudit_email_${hid}`) : false;
   });
   const [userEmail, setUserEmail] = useState(() => {
     if (typeof window === "undefined") return "";
     const params = new URLSearchParams(window.location.search);
     const hid = params.get("hub_id");
-    return hid ? localStorage.getItem(`auditbot_email_${hid}`) || "" : "";
+    return hid ? localStorage.getItem(`stackaudit_email_${hid}`) || "" : "";
   });
   const [emailInput, setEmailInput] = useState("");
   const [emailSubmitting, setEmailSubmitting] = useState(false);
+
+  // Check magic link cookie on mount — skip email form if already authenticated
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(r => r.json())
+      .then((data: { authenticated: boolean; email?: string }) => {
+        if (data.authenticated && data.email && !emailCaptured) {
+          setUserEmail(data.email);
+          setEmailCaptured(true);
+          if (hubId) localStorage.setItem(`stackaudit_email_${hubId}`, data.email);
+        }
+      })
+      .catch(() => {});
+  }, [hubId, emailCaptured]);
 
   const runAudit = useCallback(async (portalId: string) => {
     setLoading(true);
@@ -80,7 +95,7 @@ function DashboardPageInner() {
       if (!res.ok) throw new Error("Failed to save email");
       setUserEmail(emailInput);
       setEmailCaptured(true);
-      if (hubId) localStorage.setItem(`auditbot_email_${hubId}`, emailInput);
+      if (hubId) localStorage.setItem(`stackaudit_email_${hubId}`, emailInput);
       runAudit(portal.id);
     } catch {
       setError("Failed to save email. Please try again.");
@@ -122,7 +137,7 @@ function DashboardPageInner() {
         <nav className="border-b border-zinc-800 px-6 py-4">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <a href="/" className="text-xl font-bold text-brand">
-              AuditBot
+              StackAudit
             </a>
           </div>
         </nav>
@@ -142,7 +157,7 @@ function DashboardPageInner() {
         <nav className="border-b border-zinc-800 px-6 py-4">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <a href="/" className="text-xl font-bold text-brand">
-              AuditBot
+              StackAudit
             </a>
           </div>
         </nav>
@@ -173,7 +188,7 @@ function DashboardPageInner() {
         <nav className="border-b border-zinc-800 px-6 py-4">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <a href="/" className="text-xl font-bold text-brand">
-              AuditBot
+              StackAudit
             </a>
           </div>
         </nav>
@@ -236,7 +251,7 @@ function DashboardPageInner() {
       <nav className="border-b border-zinc-800 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <a href="/" className="text-xl font-bold text-brand">
-            AuditBot
+            StackAudit
           </a>
           <div className="flex items-center gap-4">
             <a
@@ -287,29 +302,51 @@ function DashboardPageInner() {
           <>
             <AuditScore score={audit.score} />
 
-            {/* Upgrade Banner */}
-            <div className="mt-6 bg-brand/10 border border-brand/30 rounded-xl p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-brand font-semibold text-sm mb-1">You&apos;re on the free plan</p>
-                  <p className="text-zinc-400 text-sm">Upgrade to get weekly monitoring, Slack alerts, and full audit history — automatically.</p>
+            {/* Plan Banner */}
+            {portal?.plan === "free" && (
+              <div className="mt-6 bg-brand/10 border border-brand/30 rounded-xl p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-brand font-semibold text-sm mb-1">You&apos;re on the free plan</p>
+                    <p className="text-zinc-400 text-sm">Upgrade to get weekly monitoring, email digests, and full audit history — automatically.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => handleCheckout("starter")}
+                    className="bg-brand hover:bg-brand-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Starter — $49/mo
+                  </button>
+                  <button
+                    onClick={() => handleCheckout("pro")}
+                    className="bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Pro — $99/mo
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-3 mt-4">
-                <button
-                  onClick={() => handleCheckout("starter")}
-                  className="bg-brand hover:bg-brand-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-                >
-                  Starter — $49/mo
-                </button>
+            )}
+            {portal?.plan === "starter" && (
+              <div className="mt-6 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-emerald-400 font-semibold text-sm">✓ Starter Plan</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">Weekly audits + email digests active</p>
+                </div>
                 <button
                   onClick={() => handleCheckout("pro")}
-                  className="bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                  className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
                 >
-                  Pro — $99/mo
+                  Upgrade to Pro
                 </button>
               </div>
-            </div>
+            )}
+            {portal?.plan === "pro" && (
+              <div className="mt-6 bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
+                <p className="text-purple-400 font-semibold text-sm">✓ Pro Plan</p>
+                <p className="text-zinc-500 text-xs mt-0.5">Weekly audits + email digests + priority support active</p>
+              </div>
+            )}
 
             <div className="mt-8 space-y-4">
               <h2 className="text-lg font-semibold text-zinc-300">

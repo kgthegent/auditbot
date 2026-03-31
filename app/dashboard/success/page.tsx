@@ -13,7 +13,7 @@ function SuccessPageInner() {
         <div className="text-6xl mb-6">🎉</div>
         <h1 className="text-3xl font-bold mb-4">You&apos;re all set!</h1>
         <p className="text-zinc-400 mb-8">
-          Your HubSpot portal is now connected to AuditBot. Weekly hygiene reports will be delivered automatically.
+          Your HubSpot portal is now connected to StackAudit. Weekly hygiene reports will be delivered automatically.
         </p>
         <a
           href={hubId ? `/dashboard?hub_id=${hubId}` : "/dashboard"}

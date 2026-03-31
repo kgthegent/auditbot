@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     const session = event.data.object;
     const portalId = session.metadata?.portal_id;
     const plan = session.metadata?.plan;
+    const customerId = session.customer as string;
 
     if (portalId && plan) {
       const { data: portal } = await supabaseAdmin
@@ -37,10 +38,47 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (portal) {
+        // Update plan and store Stripe customer ID for future portal sessions
         await supabaseAdmin
           .from("users")
-          .update({ plan })
+          .update({
+            plan,
+            stripe_customer_id: customerId,
+          })
           .eq("id", portal.user_id);
+      }
+    }
+  }
+
+  if (
+    event.type === "customer.subscription.deleted" ||
+    event.type === "customer.subscription.updated"
+  ) {
+    const subscription = event.data.object;
+    const customerId = subscription.customer as string;
+
+    // For deleted subscriptions, or updated ones where status is canceled/unpaid
+    const shouldDowngrade =
+      event.type === "customer.subscription.deleted" ||
+      ["canceled", "unpaid", "past_due"].includes(subscription.status);
+
+    if (shouldDowngrade) {
+      // Find user by Stripe customer ID and downgrade to free
+      const { data: user } = await supabaseAdmin
+        .from("users")
+        .select("id")
+        .eq("stripe_customer_id", customerId)
+        .single();
+
+      if (user) {
+        await supabaseAdmin
+          .from("users")
+          .update({ plan: "free" })
+          .eq("id", user.id);
+
+        console.log(
+          `Downgraded user ${user.id} to free (customer: ${customerId}, event: ${event.type})`
+        );
       }
     }
   }

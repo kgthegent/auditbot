@@ -5,7 +5,8 @@ create table if not exists users (
   id uuid primary key default gen_random_uuid(),
   email text unique not null,
   created_at timestamptz default now(),
-  plan text not null default 'free' check (plan in ('free', 'starter', 'pro', 'agency'))
+  plan text not null default 'free' check (plan in ('free', 'starter', 'pro', 'agency')),
+  stripe_customer_id text unique
 );
 
 create table if not exists portals (
@@ -58,3 +59,15 @@ create index if not exists idx_audits_portal_id on audits(portal_id);
 create index if not exists idx_audits_created_at on audits(created_at desc);
 create index if not exists idx_audit_checks_audit_id on audit_checks(audit_id);
 create index if not exists idx_email_sequences_next_send on email_sequences(next_send_at) where completed = false;
+
+create table if not exists magic_links (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  token text not null unique,
+  hub_id text,
+  expires_at timestamptz not null,
+  used boolean default false,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_magic_links_token on magic_links(token);
