@@ -230,6 +230,22 @@ function DashboardPageInner() {
     );
   }
 
+  const handleManageSubscription = async () => {
+    if (!userEmail) return;
+    try {
+      const res = await fetch("/api/stripe/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail }),
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+      else alert("Error: " + (data.error || "Could not open billing portal"));
+    } catch (e) {
+      alert("Failed to open billing portal: " + e);
+    }
+  };
+
   const handleCheckout = async (plan: "starter" | "pro") => {
     if (!portal) return;
     try {
@@ -333,18 +349,34 @@ function DashboardPageInner() {
                   <p className="text-emerald-400 font-semibold text-sm">✓ Starter Plan</p>
                   <p className="text-zinc-500 text-xs mt-0.5">Weekly audits + email digests active</p>
                 </div>
-                <button
-                  onClick={() => handleCheckout("pro")}
-                  className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  Upgrade to Pro
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleCheckout("pro")}
+                    className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Upgrade to Pro
+                  </button>
+                  <button
+                    onClick={handleManageSubscription}
+                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Manage
+                  </button>
+                </div>
               </div>
             )}
             {portal?.plan === "pro" && (
-              <div className="mt-6 bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
-                <p className="text-purple-400 font-semibold text-sm">✓ Pro Plan</p>
-                <p className="text-zinc-500 text-xs mt-0.5">Weekly audits + email digests + priority support active</p>
+              <div className="mt-6 bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-purple-400 font-semibold text-sm">✓ Pro Plan</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">Weekly audits + email digests + priority support active</p>
+                </div>
+                <button
+                  onClick={handleManageSubscription}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Manage Subscription
+                </button>
               </div>
             )}
 
