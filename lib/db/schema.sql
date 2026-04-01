@@ -71,3 +71,13 @@ create table if not exists magic_links (
 );
 
 create index if not exists idx_magic_links_token on magic_links(token);
+
+-- Row-Level Security
+-- All tables have RLS enabled. No anon/public policies = anon key has zero access.
+-- Service role bypasses RLS and retains full access (used by supabaseAdmin client).
+alter table users enable row level security;
+alter table portals enable row level security;
+alter table audits enable row level security;
+alter table audit_checks enable row level security;
+alter table email_sequences enable row level security;
+alter table magic_links enable row level security;
