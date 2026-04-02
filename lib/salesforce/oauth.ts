@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 const SF_AUTH_URL = "https://login.salesforce.com/services/oauth2/authorize";
 const SF_TOKEN_URL = "https://login.salesforce.com/services/oauth2/token";
 
@@ -5,12 +7,23 @@ const clientId = () => process.env.SALESFORCE_CLIENT_ID!;
 const clientSecret = () => process.env.SALESFORCE_CLIENT_SECRET!;
 const redirectUri = () => process.env.SALESFORCE_REDIRECT_URI!;
 
-export function getAuthUrl(state?: string): string {
+// PKCE helpers
+export function generateCodeVerifier(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+export function generateCodeChallenge(verifier: string): string {
+  return crypto.createHash("sha256").update(verifier).digest("base64url");
+}
+
+export function getAuthUrl(codeChallenge: string, state?: string): string {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: clientId(),
     redirect_uri: redirectUri(),
     scope: "api refresh_token",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
     ...(state && { state }),
   });
   return `${SF_AUTH_URL}?${params.toString()}`;
@@ -23,7 +36,7 @@ interface TokenResponse {
   id: string; // identity URL e.g. https://login.salesforce.com/id/00Dxx.../005xx...
 }
 
-export async function exchangeCode(code: string): Promise<TokenResponse> {
+export async function exchangeCode(code: string, codeVerifier: string): Promise<TokenResponse> {
   const res = await fetch(SF_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -33,6 +46,7 @@ export async function exchangeCode(code: string): Promise<TokenResponse> {
       client_secret: clientSecret(),
       redirect_uri: redirectUri(),
       code,
+      code_verifier: codeVerifier,
     }),
   });
 

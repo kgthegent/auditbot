@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/client";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
+  const codeVerifier = request.cookies.get("sf_code_verifier")?.value;
 
   if (!code) {
     return NextResponse.redirect(
@@ -11,8 +12,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  if (!codeVerifier) {
+    return NextResponse.redirect(
+      new URL("/connect?error=missing_verifier", request.url)
+    );
+  }
+
   try {
-    const tokens = await exchangeCode(code);
+    const tokens = await exchangeCode(code, codeVerifier);
     const orgId = getOrgId(tokens.id);
 
     // Upsert user (placeholder email until we capture real one)
