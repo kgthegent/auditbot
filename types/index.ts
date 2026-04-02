@@ -9,6 +9,8 @@ export interface User {
   plan: Plan;
 }
 
+export type Platform = "hubspot" | "salesforce";
+
 export interface Portal {
   id: string;
   user_id: string;
@@ -16,6 +18,8 @@ export interface Portal {
   access_token: string;
   refresh_token: string;
   portal_name: string;
+  platform: Platform;
+  instance_url: string | null;
   created_at: string;
 }
 

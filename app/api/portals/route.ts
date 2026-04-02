@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const { data: portal, error } = await supabaseAdmin
     .from("portals")
-    .select("id, hub_id, portal_name, user_id, users(plan)")
+    .select("id, hub_id, portal_name, platform, user_id, users(plan)")
     .eq("hub_id", hubId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -27,5 +27,6 @@ export async function GET(req: NextRequest) {
   }
 
   const plan = (portal.users as { plan?: string } | null)?.plan ?? "free";
-  return NextResponse.json({ id: portal.id, hub_id: portal.hub_id, portal_name: portal.portal_name, plan });
+  const platform = portal.platform || "hubspot";
+  return NextResponse.json({ id: portal.id, hub_id: portal.hub_id, portal_name: portal.portal_name, platform, plan });
 }

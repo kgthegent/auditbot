@@ -3,7 +3,8 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/client";
-import { runAllChecks } from "@/lib/audit/engine";
+import { runAllChecks as runHubSpotChecks } from "@/lib/audit/engine";
+import { runAllChecks as runSalesforceChecks } from "@/lib/salesforce/audit";
 import { calculateScore } from "@/lib/audit/score";
 import { sendEmail } from "@/lib/email/sequence";
 
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
   // Get all paid portals (starter or pro)
   const { data: portals, error } = await supabaseAdmin
     .from("portals")
-    .select("id, hub_id, portal_name, access_token, user_id, users(email, plan)")
+    .select("id, hub_id, portal_name, access_token, platform, user_id, users(email, plan)")
     .in("users.plan", ["starter", "pro"]);
 
   if (error) {
@@ -42,7 +43,11 @@ export async function GET(req: NextRequest) {
 
       if (!audit) continue;
 
-      const checks = await runAllChecks(portal.access_token);
+      const platform = portal.platform || "hubspot";
+      const checks =
+        platform === "salesforce"
+          ? await runSalesforceChecks(portal.id)
+          : await runHubSpotChecks(portal.access_token);
       const score = calculateScore(checks);
 
       await supabaseAdmin.from("audit_checks").insert(

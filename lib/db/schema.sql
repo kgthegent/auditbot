@@ -16,6 +16,8 @@ create table if not exists portals (
   access_token text not null,
   refresh_token text not null,
   portal_name text not null default '',
+  platform text not null default 'hubspot' check (platform in ('hubspot', 'salesforce')),
+  instance_url text,
   created_at timestamptz default now(),
   unique (user_id, hub_id)
 );

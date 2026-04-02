@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/client";
-import { runAllChecks } from "@/lib/audit/engine";
+import { runAllChecks as runHubSpotChecks } from "@/lib/audit/engine";
+import { runAllChecks as runSalesforceChecks } from "@/lib/salesforce/audit";
 import { calculateScore } from "@/lib/audit/score";
 
 export async function POST(request: NextRequest) {
@@ -33,8 +34,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create audit" }, { status: 500 });
     }
 
-    // Run all checks
-    const checks = await runAllChecks(portal.access_token);
+    // Run checks based on platform
+    const platform = portal.platform || "hubspot";
+    const checks =
+      platform === "salesforce"
+        ? await runSalesforceChecks(portal.id)
+        : await runHubSpotChecks(portal.access_token);
+
     const score = calculateScore(checks);
 
     // Save check results
@@ -61,7 +67,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Audit run error:", error);
     return NextResponse.json(
-      { error: "Audit failed. Check your HubSpot connection." },
+      { error: "Audit failed. Check your CRM connection." },
       { status: 500 }
     );
   }

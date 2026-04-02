@@ -16,6 +16,7 @@ interface PortalData {
   id: string;
   hub_id: string;
   portal_name: string;
+  platform: "hubspot" | "salesforce";
   plan: "free" | "starter" | "pro";
 }
 
@@ -277,9 +278,20 @@ function DashboardPageInner() {
               History
             </a>
             {portal && (
-              <span className="text-xs bg-zinc-800 text-zinc-400 px-3 py-1 rounded-full">
-                {portal.portal_name || `Hub ${portal.hub_id}`}
-              </span>
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-xs font-semibold px-2 py-0.5 rounded"
+                  style={{
+                    backgroundColor: portal.platform === "salesforce" ? "#00A1E0" : "#FF7A59",
+                    color: "#fff",
+                  }}
+                >
+                  {portal.platform === "salesforce" ? "Salesforce" : "HubSpot"}
+                </span>
+                <span className="text-xs bg-zinc-800 text-zinc-400 px-3 py-1 rounded-full">
+                  {portal.portal_name || (portal.platform === "salesforce" ? `Org ${portal.hub_id}` : `Hub ${portal.hub_id}`)}
+                </span>
+              </div>
             )}
           </div>
         </div>
@@ -309,7 +321,7 @@ function DashboardPageInner() {
           <div className="text-center py-20">
             <div className="inline-block w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
             <p className="text-zinc-500 mt-4">
-              Scanning your HubSpot portal...
+              Scanning your {portal?.platform === "salesforce" ? "Salesforce org" : "HubSpot portal"}...
             </p>
           </div>
         )}
@@ -395,7 +407,7 @@ function DashboardPageInner() {
           <div className="text-center py-20 text-zinc-600">
             <p className="text-lg">No audit results yet</p>
             <p className="text-sm mt-2">
-              Click &quot;Run Audit&quot; to scan your HubSpot portal
+              Click &quot;Run Audit&quot; to scan your {portal?.platform === "salesforce" ? "Salesforce org" : "HubSpot portal"}
             </p>
           </div>
         )}
