@@ -23,13 +23,18 @@ export default function Home() {
 
       {/* Hero */}
       <section className="max-w-3xl mx-auto px-6 pt-28 pb-20 text-center">
+        <div className="inline-flex items-center gap-2 bg-brand/10 border border-brand/20 text-brand text-xs font-semibold px-3 py-1.5 rounded-full mb-8">
+          ✓ Free audit — no credit card required
+        </div>
         <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6">
-          Your CRM is
-          <br />
-          <span className="text-brand">probably a mess.</span>
+          Find the revenue<br />
+          <span className="text-brand">leaking from your CRM.</span>
         </h1>
-        <p className="text-xl text-zinc-400 mb-10 max-w-xl mx-auto">
-          StackAudit scans your HubSpot or Salesforce in seconds. Get a health score, find duplicates, missing data, and stale leads — with step-by-step fixes.
+        <p className="text-xl text-zinc-400 mb-4 max-w-xl mx-auto">
+          Most ops teams are sitting on 200+ broken records, unowned leads, and attribution gaps that silently kill pipeline. StackAudit finds them in 30 seconds.
+        </p>
+        <p className="text-sm text-zinc-500 mb-10 max-w-md mx-auto">
+          If we don&apos;t surface at least 5 fixable issues, your next month is on us.
         </p>
         <ConnectButton />
         <p className="text-sm text-zinc-600 mt-4">
@@ -44,7 +49,7 @@ export default function Home() {
             Your CRM has problems you don&apos;t know about
           </h2>
           <p className="text-zinc-400 text-center mb-12 max-w-2xl mx-auto">
-            Most ops teams discover data quality issues when pipeline reviews go wrong. By then, deals have already gone cold.
+            Most ops teams discover CRM problems when pipeline reviews go wrong or a deal falls through the cracks. By then, deals have already gone cold — and you can&apos;t get that time back.
           </p>
           <div className="grid md:grid-cols-3 gap-8 text-center">
             {[
@@ -54,7 +59,7 @@ export default function Home() {
             ].map((s) => (
               <div key={s.label}>
                 <div className={`text-4xl font-bold mb-2 ${s.color}`}>{s.stat}</div>
-                <p className="text-sm text-zinc-400">{s.label}</p>
+                <p className="text-sm text-zinc-400 leading-snug">{s.label}</p>
               </div>
             ))}
           </div>
@@ -127,9 +132,9 @@ export default function Home() {
       <section id="pricing" className="max-w-4xl mx-auto px-6 py-20">
         <h2 className="text-3xl font-bold text-center mb-4">Simple pricing</h2>
         <p className="text-zinc-400 text-center mb-12">
-          Start free. Upgrade when you want ongoing monitoring.
+          Start free. Upgrade when you want ongoing monitoring or hands-on help.
         </p>
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-4 gap-6">
           {/* Free */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
             <h3 className="text-lg font-semibold mb-1">Free</h3>
@@ -176,6 +181,36 @@ export default function Home() {
               Start Free, Upgrade Later
             </a>
           </div>
+
+          {/* Done For You */}
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 relative">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-zinc-600 text-white text-xs font-semibold px-3 py-0.5 rounded-full whitespace-nowrap">
+              We do it for you
+            </div>
+            <h3 className="text-lg font-semibold mb-1">Done For You</h3>
+            <div className="text-3xl font-bold mb-1">$750</div>
+            <p className="text-xs text-zinc-500 mb-4">one-time</p>
+            <ul className="space-y-2 text-sm text-zinc-400 mb-6">
+              <li className="flex items-start gap-2"><span className="text-brand mt-0.5">&#10003;</span> Full CRM audit</li>
+              <li className="flex items-start gap-2"><span className="text-brand mt-0.5">&#10003;</span> We fix your top 3 issues</li>
+              <li className="flex items-start gap-2"><span className="text-brand mt-0.5">&#10003;</span> 1-hour strategy call</li>
+              <li className="flex items-start gap-2"><span className="text-brand mt-0.5">&#10003;</span> 30-day follow-up audit</li>
+            </ul>
+            <a href="mailto:kyle@village-consulting.com?subject=StackAudit Done-For-You" className="block text-center bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors">
+              Contact Us
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* Guarantee */}
+      <section className="max-w-3xl mx-auto px-6 py-16">
+        <div className="bg-brand/5 border border-brand/20 rounded-2xl p-8 text-center">
+          <div className="text-3xl mb-3">🛡️</div>
+          <h2 className="text-xl font-bold mb-3">The StackAudit Guarantee</h2>
+          <p className="text-zinc-400 text-sm max-w-lg mx-auto">
+            If your first audit doesn&apos;t surface at least <strong className="text-white">5 actionable issues</strong> in your CRM, your first paid month is completely free. We&apos;re confident in what we find — because we&apos;ve never run an audit that came back clean.
+          </p>
         </div>
       </section>
 
@@ -203,10 +238,13 @@ export default function Home() {
       {/* Final CTA */}
       <section className="max-w-3xl mx-auto px-6 py-20 text-center">
         <h2 className="text-3xl font-bold mb-4">
-          Find out what&apos;s wrong with your CRM
+          Find the revenue leaking<br />from your pipeline
         </h2>
-        <p className="text-zinc-400 mb-8">
+        <p className="text-zinc-400 mb-3">
           It takes 30 seconds. Connect your CRM, get your score.
+        </p>
+        <p className="text-sm text-zinc-500 mb-8">
+          If we don&apos;t find at least 5 fixable issues, your first paid month is free.
         </p>
         <ConnectButton />
         <p className="text-sm text-zinc-600 mt-4">
