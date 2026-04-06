@@ -188,7 +188,7 @@ export default function Home() {
               We do it for you
             </div>
             <h3 className="text-lg font-semibold mb-1">Done For You</h3>
-            <div className="text-3xl font-bold mb-1">$750</div>
+            <div className="text-3xl font-bold mb-1">$1,500</div>
             <p className="text-xs text-zinc-500 mb-4">one-time</p>
             <ul className="space-y-2 text-sm text-zinc-400 mb-6">
               <li className="flex items-start gap-2"><span className="text-brand mt-0.5">&#10003;</span> Full CRM audit</li>
