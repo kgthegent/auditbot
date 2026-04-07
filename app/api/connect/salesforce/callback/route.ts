@@ -8,13 +8,13 @@ export async function GET(request: NextRequest) {
 
   if (!code) {
     return NextResponse.redirect(
-      new URL("/connect?error=missing_code", request.url)
+      new URL("/connect/salesforce?error=missing_code", request.url)
     );
   }
 
   if (!codeVerifier) {
     return NextResponse.redirect(
-      new URL("/connect?error=missing_verifier", request.url)
+      new URL("/connect/salesforce?error=missing_verifier", request.url)
     );
   }
 
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Salesforce OAuth callback error:", error);
     return NextResponse.redirect(
-      new URL("/connect?error=oauth_failed", request.url)
+      new URL("/connect/salesforce?error=oauth_failed", request.url)
     );
   }
 }

@@ -4,19 +4,36 @@ import { runAllChecks as runHubSpotChecks } from "@/lib/audit/engine";
 import { runAllChecks as runSalesforceChecks } from "@/lib/salesforce/audit";
 import { calculateScore } from "@/lib/audit/score";
 
+export const dynamic = "force-dynamic";
+
+async function getAuthUser(req: NextRequest) {
+  const email = req.cookies.get("sa_email")?.value;
+  if (!email) return null;
+  const { data: user } = await supabaseAdmin
+    .from("users")
+    .select("id")
+    .eq("email", email)
+    .single();
+  return user ?? null;
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { portal_id } = await request.json();
 
     if (!portal_id) {
       return NextResponse.json({ error: "portal_id is required" }, { status: 400 });
     }
 
-    // Get portal
+    // Get portal and verify ownership
     const { data: portal, error: portalError } = await supabaseAdmin
       .from("portals")
       .select("*")
       .eq("id", portal_id)
+      .eq("user_id", authUser.id)
       .single();
 
     if (portalError || !portal) {
