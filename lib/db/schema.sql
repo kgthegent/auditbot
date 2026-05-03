@@ -16,8 +16,10 @@ create table if not exists portals (
   access_token text not null,
   refresh_token text not null,
   portal_name text not null default '',
-  platform text not null default 'hubspot' check (platform in ('hubspot', 'salesforce')),
+  platform text not null default 'hubspot' check (platform in ('hubspot', 'salesforce', 'marketo', 'marketing_cloud')),
   instance_url text,
+  auth_config jsonb not null default '{}',
+  token_expires_at timestamptz,
   created_at timestamptz default now(),
   unique (user_id, hub_id)
 );
@@ -26,6 +28,7 @@ create table if not exists audits (
   id uuid primary key default gen_random_uuid(),
   portal_id uuid not null references portals(id) on delete cascade,
   score integer not null default 0,
+  report_token text unique,
   created_at timestamptz default now(),
   completed_at timestamptz
 );
@@ -39,7 +42,13 @@ create table if not exists audit_checks (
   percentage numeric(5,2) not null default 0,
   status text not null check (status in ('pass', 'warn', 'fail')),
   description text not null default '',
-  fix_steps jsonb not null default '[]'
+  fix_steps jsonb not null default '[]',
+  example_records jsonb not null default '[]',
+  workflow_status text not null default 'open' check (workflow_status in ('open', 'in_progress', 'fixed', 'ignored')),
+  assigned_to text,
+  due_at timestamptz,
+  notes text not null default '',
+  resolved_at timestamptz
 );
 
 create table if not exists email_sequences (
@@ -59,7 +68,9 @@ create table if not exists email_sequences (
 create index if not exists idx_portals_user_id on portals(user_id);
 create index if not exists idx_audits_portal_id on audits(portal_id);
 create index if not exists idx_audits_created_at on audits(created_at desc);
+create index if not exists idx_audits_report_token on audits(report_token);
 create index if not exists idx_audit_checks_audit_id on audit_checks(audit_id);
+create index if not exists idx_audit_checks_workflow_status on audit_checks(workflow_status);
 create index if not exists idx_email_sequences_next_send on email_sequences(next_send_at) where completed = false;
 
 create table if not exists magic_links (

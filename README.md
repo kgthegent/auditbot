@@ -1,6 +1,6 @@
 # AuditBot
 
-Automated HubSpot CRM hygiene monitoring by [Village Consulting](https://village-consulting.com).
+Automated CRM and marketing automation health monitoring by [Village Consulting](https://village-consulting.com).
 
 ## Tech Stack
 
@@ -8,6 +8,7 @@ Automated HubSpot CRM hygiene monitoring by [Village Consulting](https://village
 - **Supabase** (Postgres) for database
 - **Tailwind CSS** for styling
 - **HubSpot OAuth 2.0** + API v3
+- **Salesforce OAuth 2.0** + REST/SOQL APIs
 - **Stripe** for payments (wired up, not yet integrated)
 
 ## Getting Started
@@ -46,6 +47,27 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Supported Platforms
+
+| Platform | Status | Coverage |
+|----------|--------|----------|
+| HubSpot | Live | Contacts, owners, lifecycle stages, source attribution |
+| Salesforce | Live | Leads, contacts, opportunities, owners, activity, attribution |
+| Marketo Engage | Beta connector | Server-to-server credential validation and lead metadata access |
+| Salesforce Marketing Cloud | Beta connector | Installed Package credential validation and account API metadata access |
+| Account Engagement, Klaviyo, ActiveCampaign | Roadmap | Planned marketing automation health checks |
+
+Platform metadata lives in `lib/platforms.ts` so new systems can share connect UI, platform labels, access-scope copy, and audit catalog data.
+Audit execution is routed through platform adapters in `lib/platform-adapters/`.
+
+### Database migrations
+
+If you already created the Supabase schema before Marketo and Marketing Cloud support, run:
+
+```bash
+lib/db/migrations/20260429_platform_credentials.sql
+```
+
 ## Audit Checks
 
 | Check | Severity | What it detects |
@@ -76,6 +98,11 @@ lib/
   audit/                # Audit engine + scoring
   db/                   # Database schema
   hubspot/              # HubSpot OAuth client
+  marketo/              # Marketo token and REST helpers
+  marketing-cloud/      # Marketing Cloud token and REST helpers
+  platform-adapters/    # Platform-specific audit adapter registry
+  platforms.ts          # Supported platform registry + audit catalog metadata
+  salesforce/           # Salesforce OAuth client + audit checks
   supabase/             # Supabase client
 types/                  # TypeScript types
 ```

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { setSessionCookies } from "@/lib/auth/session";
 import { exchangeCode, getOrgId } from "@/lib/salesforce/oauth";
 import { supabaseAdmin } from "@/lib/supabase/client";
 
@@ -22,11 +23,13 @@ export async function GET(request: NextRequest) {
     const tokens = await exchangeCode(code, codeVerifier);
     const orgId = getOrgId(tokens.id);
 
+    const placeholderEmail = `salesforce-${orgId}@placeholder.local`;
+
     // Upsert user (placeholder email until we capture real one)
     const { data: user, error: userError } = await supabaseAdmin
       .from("users")
       .upsert(
-        { email: `salesforce-${orgId}@placeholder.local` },
+        { email: placeholderEmail },
         { onConflict: "email" }
       )
       .select()
@@ -56,9 +59,11 @@ export async function GET(request: NextRequest) {
       throw new Error(`Failed to upsert portal: ${portalError.message}`);
     }
 
-    return NextResponse.redirect(
+    const response = NextResponse.redirect(
       new URL(`/dashboard?hub_id=${orgId}`, request.url)
     );
+    setSessionCookies(response, placeholderEmail, orgId);
+    return response;
   } catch (error) {
     console.error("Salesforce OAuth callback error:", error);
     return NextResponse.redirect(

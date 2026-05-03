@@ -7,11 +7,26 @@ const redirectUri = () => process.env.HUBSPOT_REDIRECT_URI!;
 
 const SCOPES = [
   "crm.objects.contacts.read",
-  "crm.objects.contacts.write",
   "crm.objects.owners.read",
 ].join(" ");
 
+function requireHubSpotConfig() {
+  const missing = [
+    ["HUBSPOT_CLIENT_ID", clientId()],
+    ["HUBSPOT_CLIENT_SECRET", clientSecret()],
+    ["HUBSPOT_REDIRECT_URI", redirectUri()],
+  ]
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+
+  if (missing.length > 0) {
+    throw new Error(`Missing HubSpot configuration: ${missing.join(", ")}`);
+  }
+}
+
 export function getAuthUrl(state?: string): string {
+  requireHubSpotConfig();
+
   const params = new URLSearchParams({
     client_id: clientId(),
     redirect_uri: redirectUri(),
@@ -28,6 +43,8 @@ interface TokenResponse {
 }
 
 export async function exchangeCode(code: string): Promise<TokenResponse> {
+  requireHubSpotConfig();
+
   const res = await fetch(HUBSPOT_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -49,6 +66,8 @@ export async function exchangeCode(code: string): Promise<TokenResponse> {
 }
 
 export async function refreshToken(refresh_token: string): Promise<TokenResponse> {
+  requireHubSpotConfig();
+
   const res = await fetch(HUBSPOT_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

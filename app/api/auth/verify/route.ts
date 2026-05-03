@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
+import { setSessionCookies } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabase/client";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://auditbot-zeta.vercel.app";
@@ -29,22 +30,7 @@ export async function GET(req: NextRequest) {
     : `${APP_URL}/connect`;
 
   const res = NextResponse.redirect(redirectUrl);
-
-  // Set auth cookie (30 days)
-  res.cookies.set("sa_email", link.email, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 30,
-    path: "/",
-  });
-  res.cookies.set("sa_hub_id", link.hub_id ?? "", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 30,
-    path: "/",
-  });
+  setSessionCookies(res, link.email, link.hub_id);
 
   return res;
 }

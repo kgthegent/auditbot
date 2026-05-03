@@ -22,8 +22,8 @@ export default function TermsPage() {
 
         <h2>2. Description of Service</h2>
         <p>
-          StackAudit provides automated auditing and monitoring tools for HubSpot CRM databases.
-          The Service analyzes your connected HubSpot portal and provides hygiene scores,
+          StackAudit provides automated auditing and monitoring tools for CRM and marketing
+          automation platforms. The Service analyzes your connected platform and provides hygiene scores,
           recommendations, and ongoing monitoring depending on your subscription plan.
         </p>
 
@@ -45,7 +45,8 @@ export default function TermsPage() {
 
         <h2>5. Data and Privacy</h2>
         <p>
-          By connecting your HubSpot portal, you grant StackAudit read access to your CRM data
+          By connecting a supported platform, you grant StackAudit read access to your CRM or
+          marketing automation data
           solely for the purpose of providing audit and monitoring services. We do not sell your
           data to third parties. See our <a href="/privacy">Privacy Policy</a> for full details.
         </p>

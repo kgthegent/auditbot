@@ -4,10 +4,13 @@ import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import AuditScore from "@/components/AuditScore";
 import CheckCard from "@/components/CheckCard";
-import { CheckResult } from "@/types";
+import { isPlaceholderEmail } from "@/lib/auth/email";
+import { getPlatformConfig } from "@/lib/platforms";
+import { CheckResult, WorkflowStatus } from "@/types";
 
 interface AuditData {
   audit_id: string;
+  report_token?: string | null;
   score: number;
   checks: CheckResult[];
 }
@@ -16,7 +19,7 @@ interface PortalData {
   id: string;
   hub_id: string;
   portal_name: string;
-  platform: "hubspot" | "salesforce";
+  platform: "hubspot" | "salesforce" | "marketo" | "marketing_cloud";
   plan: "free" | "starter" | "pro";
 }
 
@@ -31,6 +34,7 @@ function DashboardPageInner() {
   const [audit, setAudit] = useState<AuditData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [workflowSaving, setWorkflowSaving] = useState<string | null>(null);
 
   const [emailCaptured, setEmailCaptured] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -52,7 +56,7 @@ function DashboardPageInner() {
     fetch("/api/auth/me")
       .then(r => r.json())
       .then((data: { authenticated: boolean; email?: string }) => {
-        if (data.authenticated && data.email && !emailCaptured) {
+        if (data.authenticated && data.email && !isPlaceholderEmail(data.email) && !emailCaptured) {
           setUserEmail(data.email);
           setEmailCaptured(true);
           if (hubId) localStorage.setItem(`stackaudit_email_${hubId}`, data.email);
@@ -103,7 +107,81 @@ function DashboardPageInner() {
     } finally {
       setEmailSubmitting(false);
     }
-  }, [emailInput, portal, runAudit]);
+  }, [emailInput, hubId, portal, runAudit]);
+
+  const updateCheckWorkflow = useCallback(
+    async (
+      check: CheckResult,
+      updates: {
+        workflowStatus: WorkflowStatus;
+        assignedTo?: string | null;
+        dueAt?: string | null;
+        notes?: string;
+      }
+    ) => {
+      if (!check.id) return;
+
+      const previousAudit = audit;
+      const nextCheck: CheckResult = {
+        ...check,
+        workflowStatus: updates.workflowStatus,
+        assignedTo:
+          updates.assignedTo !== undefined ? updates.assignedTo : check.assignedTo,
+        dueAt: updates.dueAt !== undefined ? updates.dueAt : check.dueAt,
+        notes: updates.notes !== undefined ? updates.notes : check.notes,
+        resolvedAt:
+          updates.workflowStatus === "fixed" || updates.workflowStatus === "ignored"
+            ? new Date().toISOString()
+            : null,
+      };
+
+      setWorkflowSaving(check.id);
+      setError(null);
+      setAudit((current) =>
+        current
+          ? {
+              ...current,
+              checks: current.checks.map((item) =>
+                item.id === check.id ? nextCheck : item
+              ),
+            }
+          : current
+      );
+
+      try {
+        const res = await fetch(`/api/audit/checks/${check.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workflowStatus: nextCheck.workflowStatus,
+            assignedTo: nextCheck.assignedTo,
+            dueAt: nextCheck.dueAt,
+            notes: nextCheck.notes,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to update finding");
+
+        setAudit((current) =>
+          current
+            ? {
+                ...current,
+                checks: current.checks.map((item) =>
+                  item.id === check.id ? data.check : item
+                ),
+              }
+            : current
+        );
+      } catch (err) {
+        setAudit(previousAudit);
+        setError(err instanceof Error ? err.message : "Failed to update finding");
+      } finally {
+        setWorkflowSaving(null);
+      }
+    },
+    [audit]
+  );
 
   useEffect(() => {
     if (!hubId) {
@@ -116,7 +194,7 @@ function DashboardPageInner() {
       try {
         const res = await fetch(`/api/portals?hub_id=${encodeURIComponent(hubId!)}`);
         if (!res.ok) {
-          setPortalError("No portal found for this HubSpot account");
+          setPortalError("No connected platform found for this account");
           setPortalLoading(false);
           return;
         }
@@ -167,14 +245,14 @@ function DashboardPageInner() {
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-6 max-w-md mx-auto">
               <p className="text-lg font-semibold mb-2">{portalError}</p>
               <p className="text-sm text-zinc-500 mb-4">
-                Connect your HubSpot account to get started.
+                Connect a supported platform to get started.
               </p>
               <a
                 href="/connect"
                 className="inline-block text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
                 style={{ backgroundColor: '#FF7A59' }}
               >
-                Connect HubSpot
+                Connect Platform
               </a>
             </div>
           </div>
@@ -200,8 +278,8 @@ function DashboardPageInner() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold mb-2">Enter your email to see your free HubSpot audit</h2>
-            <p className="text-zinc-400 text-sm mb-6">We&apos;ll run a full health check on your portal — no credit card required.</p>
+            <h2 className="text-xl font-bold mb-2">Enter your email to see your free audit</h2>
+            <p className="text-zinc-400 text-sm mb-6">We&apos;ll run a full health check on your connected platform — no credit card required.</p>
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-3 mb-4 text-sm">
                 {error}
@@ -230,6 +308,20 @@ function DashboardPageInner() {
       </div>
     );
   }
+
+  const platformConfig = getPlatformConfig(portal?.platform);
+  const portalDisplayName =
+    portal?.portal_name ||
+    (portal ? `${platformConfig.name} ${platformConfig.productNoun} ${portal.hub_id}` : "");
+  const workflowCounts = audit?.checks.reduce(
+    (counts, check) => {
+      if (check.status === "pass") return counts;
+      const status = check.workflowStatus ?? "open";
+      counts[status] += 1;
+      return counts;
+    },
+    { open: 0, in_progress: 0, fixed: 0, ignored: 0 }
+  );
 
   const handleManageSubscription = async () => {
     if (!userEmail) return;
@@ -282,14 +374,14 @@ function DashboardPageInner() {
                 <span
                   className="text-xs font-semibold px-2 py-0.5 rounded"
                   style={{
-                    backgroundColor: portal.platform === "salesforce" ? "#00A1E0" : "#FF7A59",
+                    backgroundColor: platformConfig.brandColor,
                     color: "#fff",
                   }}
                 >
-                  {portal.platform === "salesforce" ? "Salesforce" : "HubSpot"}
+                  {platformConfig.name}
                 </span>
                 <span className="text-xs bg-zinc-800 text-zinc-400 px-3 py-1 rounded-full">
-                  {portal.portal_name || (portal.platform === "salesforce" ? `Org ${portal.hub_id}` : `Hub ${portal.hub_id}`)}
+                  {portalDisplayName}
                 </span>
               </div>
             )}
@@ -321,7 +413,7 @@ function DashboardPageInner() {
           <div className="text-center py-20">
             <div className="inline-block w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
             <p className="text-zinc-500 mt-4">
-              Scanning your {portal?.platform === "salesforce" ? "Salesforce org" : "HubSpot portal"}...
+              Scanning your {platformConfig.name} {platformConfig.productNoun}...
             </p>
           </div>
         )}
@@ -329,6 +421,50 @@ function DashboardPageInner() {
         {audit && !loading && (
           <>
             <AuditScore score={audit.score} />
+
+            {audit.report_token && (
+              <div className="mt-6 rounded-xl border border-brand/30 bg-brand/10 p-5">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-brand">
+                      Executive report ready
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Share a leadership-ready summary with risk, cleanup progress, and top recommended actions.
+                    </p>
+                  </div>
+                  <a
+                    href={`/reports/${audit.audit_id}?token=${audit.report_token}`}
+                    className="inline-flex justify-center rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
+                  >
+                    Open Report
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {workflowCounts && (
+              <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+                {[
+                  ["Open", workflowCounts.open, "text-zinc-200"],
+                  ["In Progress", workflowCounts.in_progress, "text-cyan-300"],
+                  ["Fixed", workflowCounts.fixed, "text-emerald-300"],
+                  ["Ignored", workflowCounts.ignored, "text-zinc-500"],
+                ].map(([label, count, color]) => (
+                  <div
+                    key={label}
+                    className="rounded-xl border border-zinc-800 bg-zinc-900 p-4"
+                  >
+                    <p className="text-xs uppercase tracking-wider text-zinc-600">
+                      {label}
+                    </p>
+                    <p className={`mt-2 text-2xl font-bold ${color}`}>
+                      {count}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Plan Banner */}
             {portal?.plan === "free" && (
@@ -393,11 +529,20 @@ function DashboardPageInner() {
             )}
 
             <div className="mt-8 space-y-4">
-              <h2 className="text-lg font-semibold text-zinc-300">
-                Check Results
-              </h2>
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-lg font-semibold text-zinc-300">
+                  Check Results
+                </h2>
+                {workflowSaving && (
+                  <span className="text-xs text-zinc-500">Saving workflow...</span>
+                )}
+              </div>
               {audit.checks.map((check) => (
-                <CheckCard key={check.checkName} check={check} />
+                <CheckCard
+                  key={check.id ?? check.checkName}
+                  check={check}
+                  onWorkflowChange={updateCheckWorkflow}
+                />
               ))}
             </div>
           </>
@@ -407,7 +552,7 @@ function DashboardPageInner() {
           <div className="text-center py-20 text-zinc-600">
             <p className="text-lg">No audit results yet</p>
             <p className="text-sm mt-2">
-              Click &quot;Run Audit&quot; to scan your {portal?.platform === "salesforce" ? "Salesforce org" : "HubSpot portal"}
+              Click &quot;Run Audit&quot; to scan your {platformConfig.name} {platformConfig.productNoun}
             </p>
           </div>
         )}

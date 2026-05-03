@@ -1,10 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase/client";
-import { runAllChecks as runHubSpotChecks } from "@/lib/audit/engine";
-import { runAllChecks as runSalesforceChecks } from "@/lib/salesforce/audit";
+import { runPlatformAudit } from "@/lib/audit/runners";
 import { calculateScore } from "@/lib/audit/score";
+import { CheckResult, ExampleRecord } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+function createReportToken() {
+  return randomBytes(24).toString("hex");
+}
+
+function mapCheckRow(row: {
+  id: string;
+  check_name: string;
+  severity: CheckResult["severity"];
+  count: number;
+  percentage: number;
+  status: CheckResult["status"];
+  description: string;
+  fix_steps: string[];
+  example_records: ExampleRecord[];
+  workflow_status: NonNullable<CheckResult["workflowStatus"]>;
+  assigned_to: string | null;
+  due_at: string | null;
+  notes: string;
+  resolved_at: string | null;
+}): CheckResult {
+  return {
+    id: row.id,
+    checkName: row.check_name,
+    severity: row.severity,
+    count: row.count,
+    percentage: Number(row.percentage),
+    status: row.status,
+    description: row.description,
+    fixSteps: row.fix_steps,
+    exampleRecords: row.example_records,
+    workflowStatus: row.workflow_status,
+    assignedTo: row.assigned_to,
+    dueAt: row.due_at,
+    notes: row.notes,
+    resolvedAt: row.resolved_at,
+  };
+}
 
 async function getAuthUser(req: NextRequest) {
   const email = req.cookies.get("sa_email")?.value;
@@ -41,9 +80,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Create audit record
+    const reportToken = createReportToken();
     const { data: audit, error: auditError } = await supabaseAdmin
       .from("audits")
-      .insert({ portal_id, score: 0 })
+      .insert({ portal_id, score: 0, report_token: reportToken })
       .select()
       .single();
 
@@ -51,12 +91,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create audit" }, { status: 500 });
     }
 
-    // Run checks based on platform
-    const platform = portal.platform || "hubspot";
-    const checks =
-      platform === "salesforce"
-        ? await runSalesforceChecks(portal.id)
-        : await runHubSpotChecks(portal.access_token);
+    const checks = await runPlatformAudit(portal);
 
     const score = calculateScore(checks);
 
@@ -70,9 +105,17 @@ export async function POST(request: NextRequest) {
       status: check.status,
       description: check.description,
       fix_steps: check.fixSteps,
+      example_records: check.exampleRecords ?? [],
     }));
 
-    await supabaseAdmin.from("audit_checks").insert(checkRows);
+    const { data: savedChecks, error: checksError } = await supabaseAdmin
+      .from("audit_checks")
+      .insert(checkRows)
+      .select("id, check_name, severity, count, percentage, status, description, fix_steps, example_records, workflow_status, assigned_to, due_at, notes, resolved_at");
+
+    if (checksError || !savedChecks) {
+      return NextResponse.json({ error: "Failed to save audit checks" }, { status: 500 });
+    }
 
     // Update audit with score and completion time
     await supabaseAdmin
@@ -80,7 +123,12 @@ export async function POST(request: NextRequest) {
       .update({ score, completed_at: new Date().toISOString() })
       .eq("id", audit.id);
 
-    return NextResponse.json({ audit_id: audit.id, score, checks });
+    return NextResponse.json({
+      audit_id: audit.id,
+      report_token: audit.report_token ?? reportToken,
+      score,
+      checks: savedChecks.map(mapCheckRow),
+    });
   } catch (error) {
     console.error("Audit run error:", error);
     return NextResponse.json(

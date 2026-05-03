@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { setSessionCookies } from "@/lib/auth/session";
 import { exchangeCode, getPortalInfo } from "@/lib/hubspot/oauth";
 import { supabaseAdmin } from "@/lib/supabase/client";
 
@@ -15,11 +16,13 @@ export async function GET(request: NextRequest) {
     const tokens = await exchangeCode(code);
     const portalInfo = await getPortalInfo(tokens.access_token);
 
-    // Upsert user (using a placeholder email until we get user info)
+    const placeholderEmail = `hubspot-${portalInfo.hub_id}@placeholder.local`;
+
+    // Upsert user (using a placeholder email until we capture the real email)
     const { data: user, error: userError } = await supabaseAdmin
       .from("users")
       .upsert(
-        { email: `hubspot-${portalInfo.hub_id}@placeholder.local` },
+        { email: placeholderEmail },
         { onConflict: "email" }
       )
       .select()
@@ -47,9 +50,11 @@ export async function GET(request: NextRequest) {
       throw new Error(`Failed to upsert portal: ${portalError.message}`);
     }
 
-    return NextResponse.redirect(
+    const response = NextResponse.redirect(
       new URL(`/dashboard?hub_id=${portalInfo.hub_id}`, request.url)
     );
+    setSessionCookies(response, placeholderEmail, portalInfo.hub_id);
+    return response;
   } catch (error) {
     console.error("OAuth callback error:", error);
     return NextResponse.redirect(

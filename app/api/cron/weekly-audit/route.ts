@@ -2,11 +2,16 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase/client";
-import { runAllChecks as runHubSpotChecks } from "@/lib/audit/engine";
-import { runAllChecks as runSalesforceChecks } from "@/lib/salesforce/audit";
+import { runPlatformAudit } from "@/lib/audit/runners";
+import { getPlatformConfig } from "@/lib/platforms";
 import { calculateScore } from "@/lib/audit/score";
 import { sendEmail } from "@/lib/email/sequence";
+
+function createReportToken() {
+  return randomBytes(24).toString("hex");
+}
 
 // Called by Vercel Cron — secured by CRON_SECRET header
 export async function GET(req: NextRequest) {
@@ -18,7 +23,7 @@ export async function GET(req: NextRequest) {
   // Get all paid portals (starter or pro)
   const { data: portals, error } = await supabaseAdmin
     .from("portals")
-    .select("id, hub_id, portal_name, access_token, platform, user_id, users(email, plan)")
+    .select("id, hub_id, portal_name, access_token, refresh_token, instance_url, auth_config, platform, user_id, users(email, plan)")
     .in("users.plan", ["starter", "pro"]);
 
   if (error) {
@@ -37,17 +42,14 @@ export async function GET(req: NextRequest) {
       // Run audit
       const { data: audit } = await supabaseAdmin
         .from("audits")
-        .insert({ portal_id: portal.id, score: 0 })
+        .insert({ portal_id: portal.id, score: 0, report_token: createReportToken() })
         .select()
         .single();
 
       if (!audit) continue;
 
-      const platform = portal.platform || "hubspot";
-      const checks =
-        platform === "salesforce"
-          ? await runSalesforceChecks(portal.id)
-          : await runHubSpotChecks(portal.access_token);
+      const platformConfig = getPlatformConfig(portal.platform);
+      const checks = await runPlatformAudit(portal);
       const score = calculateScore(checks);
 
       await supabaseAdmin.from("audit_checks").insert(
@@ -60,6 +62,7 @@ export async function GET(req: NextRequest) {
           status: c.status,
           description: c.description,
           fix_steps: c.fixSteps,
+          example_records: c.exampleRecords ?? [],
         }))
       );
 
@@ -80,8 +83,8 @@ export async function GET(req: NextRequest) {
     <span style="color:#fff;font-size:24px;font-weight:700;">Stack</span><span style="color:#15A1C7;font-size:24px;font-weight:700;">Audit</span>
   </div>
   <div style="padding:32px 24px;">
-    <h2 style="color:#1a1a1a;font-size:20px;margin-bottom:8px;">Your weekly HubSpot health report</h2>
-    <p style="color:#666;font-size:14px;margin-bottom:24px;">${portal.portal_name || "Your portal"} — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+    <h2 style="color:#1a1a1a;font-size:20px;margin-bottom:8px;">Your weekly ${platformConfig.name} health report</h2>
+    <p style="color:#666;font-size:14px;margin-bottom:24px;">${portal.portal_name || `Your ${platformConfig.productNoun}`} — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
     <div style="display:flex;gap:16px;margin-bottom:24px;">
       <div style="flex:1;text-align:center;padding:20px;background:#f8f8f8;border-radius:8px;">
         <div style="font-size:48px;font-weight:800;color:#1a1a1a;">${score}</div>
@@ -106,7 +109,7 @@ export async function GET(req: NextRequest) {
 </div>
 </body></html>`;
 
-      await sendEmail(user.email, `Your weekly HubSpot score: ${score}/100 — ${portal.portal_name || "HubSpot"}`, html);
+      await sendEmail(user.email, `Your weekly ${platformConfig.name} score: ${score}/100 — ${portal.portal_name || platformConfig.name}`, html);
       ran++;
     } catch (err) {
       console.error(`Failed for portal ${portal.id}:`, err);

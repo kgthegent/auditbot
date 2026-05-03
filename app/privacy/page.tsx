@@ -20,11 +20,12 @@ export default function PrivacyPage() {
             <strong>Email address</strong> — provided when you sign up or request a magic link login.
           </li>
           <li>
-            <strong>HubSpot portal data</strong> — contacts, companies, deals, and property metadata
-            accessed via the HubSpot OAuth integration for the purpose of running audits.
+            <strong>Connected platform data</strong> — CRM and marketing automation records,
+            owners, activity fields, attribution fields, and metadata accessed via OAuth
+            integrations for the purpose of running audits.
           </li>
           <li>
-            <strong>Audit results</strong> — scores and check results generated from your portal data,
+            <strong>Audit results</strong> — scores and check results generated from your connected data,
             stored to power your audit history and trend tracking.
           </li>
           <li>
@@ -55,7 +56,7 @@ export default function PrivacyPage() {
         <ul>
           <li><strong>Stripe</strong> — payment processing</li>
           <li><strong>Supabase</strong> — database and authentication infrastructure</li>
-          <li><strong>HubSpot</strong> — CRM data access via OAuth (read-only)</li>
+          <li><strong>HubSpot and Salesforce</strong> — CRM data access via OAuth (read-only)</li>
           <li><strong>Vercel</strong> — hosting and deployment infrastructure</li>
         </ul>
         <p>
@@ -70,12 +71,12 @@ export default function PrivacyPage() {
           Some data may be retained longer where required by law.
         </p>
 
-        <h2>5. HubSpot Data</h2>
+        <h2>5. Connected Platform Data</h2>
         <p>
-          StackAudit accesses your HubSpot portal via OAuth with read-only scopes. We do not
-          modify, delete, or export your HubSpot data. Audit analysis is performed server-side
+          StackAudit accesses supported platforms via OAuth with read-only scopes. We do not
+          modify, delete, or export your connected platform data. Audit analysis is performed server-side
           and only aggregate results (scores, check outcomes) are stored — not raw CRM records.
-          You can revoke our access at any time from your HubSpot connected apps settings.
+          You can revoke our access at any time from your connected app settings in the source platform.
         </p>
 
         <h2>6. Cookies and Tracking</h2>
@@ -98,7 +99,7 @@ export default function PrivacyPage() {
           <li>Access the personal data we hold about you</li>
           <li>Request correction of inaccurate data</li>
           <li>Request deletion of your data</li>
-          <li>Revoke HubSpot access at any time</li>
+          <li>Revoke connected platform access at any time</li>
         </ul>
         <p>
           To exercise any of these rights, email us at{" "}

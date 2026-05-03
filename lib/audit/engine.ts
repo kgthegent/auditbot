@@ -1,6 +1,15 @@
-import { CheckResult } from "@/types";
+import { CheckResult, ExampleRecord } from "@/types";
 
 const HUBSPOT_API = "https://api.hubapi.com";
+const SAMPLE_PROPERTIES = [
+  "firstname",
+  "lastname",
+  "email",
+  "createdate",
+  "lifecyclestage",
+  "hs_analytics_source",
+  "hubspot_owner_id",
+];
 
 async function hubspotGet(path: string, accessToken: string, params?: Record<string, string>) {
   const url = new URL(`${HUBSPOT_API}${path}`);
@@ -31,22 +40,86 @@ async function getTotalContacts(accessToken: string): Promise<number> {
   return data.total ?? 0;
 }
 
+async function getHubId(accessToken: string): Promise<string> {
+  const res = await fetch(`${HUBSPOT_API}/oauth/v1/access-tokens/${accessToken}`);
+  if (!res.ok) return "";
+  const data = await res.json();
+  return String(data.hub_id ?? "");
+}
+
+async function hubspotContactSearch(
+  accessToken: string,
+  body: Record<string, unknown>
+) {
+  const res = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      properties: SAMPLE_PROPERTIES,
+      limit: 5,
+      ...body,
+    }),
+  });
+
+  if (!res.ok) throw new Error("HubSpot contact search failed");
+  return res.json();
+}
+
+function formatDate(value?: string) {
+  if (!value) return "";
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function contactLabel(properties: Record<string, string | undefined>) {
+  const name = [properties.firstname, properties.lastname].filter(Boolean).join(" ");
+  return name || properties.email || "Unnamed contact";
+}
+
+function mapContactExamples(
+  hubId: string,
+  records: { id: string; properties: Record<string, string | undefined> }[]
+): ExampleRecord[] {
+  return records.slice(0, 5).map((record) => {
+    const created = formatDate(record.properties.createdate);
+    return {
+      id: record.id,
+      label: contactLabel(record.properties),
+      detail: record.properties.email || "No email",
+      secondary: created ? `Created ${created}` : undefined,
+      url: hubId
+        ? `https://app.hubspot.com/contacts/${hubId}/record/0-1/${record.id}`
+        : undefined,
+    };
+  });
+}
+
 function toStatus(percentage: number, warnThreshold: number, failThreshold: number) {
   if (percentage >= failThreshold) return "fail" as const;
   if (percentage >= warnThreshold) return "warn" as const;
   return "pass" as const;
 }
 
-export async function checkDuplicateContacts(accessToken: string, total: number): Promise<CheckResult> {
+export async function checkDuplicateContacts(accessToken: string, total: number, hubId: string): Promise<CheckResult> {
   // Search for contacts grouped by email to find duplicates
   const data = await hubspotGet("/crm/v3/objects/contacts", accessToken, {
     limit: "100",
-    properties: "email",
+    properties: SAMPLE_PROPERTIES.join(","),
   });
 
-  const emails = (data.results || [])
-    .map((c: { properties: { email?: string } }) => c.properties.email?.toLowerCase())
-    .filter(Boolean);
+  const records = (data.results || []) as {
+    id: string;
+    properties: Record<string, string | undefined>;
+  }[];
+  const emails = records
+    .map((c) => c.properties.email?.toLowerCase())
+    .filter(Boolean) as string[];
 
   const seen = new Set<string>();
   const dupes = new Set<string>();
@@ -57,6 +130,10 @@ export async function checkDuplicateContacts(accessToken: string, total: number)
 
   const count = dupes.size;
   const percentage = total > 0 ? (count / total) * 100 : 0;
+  const exampleRecords = mapContactExamples(
+    hubId,
+    records.filter((record) => dupes.has(record.properties.email?.toLowerCase() ?? ""))
+  );
 
   return {
     checkName: "Duplicate Contacts",
@@ -70,20 +147,15 @@ export async function checkDuplicateContacts(accessToken: string, total: number)
       "Use HubSpot's merge tool to combine duplicate records",
       "Set up a deduplication workflow to prevent future duplicates",
     ],
+    exampleRecords,
   };
 }
 
-export async function checkMissingOwner(accessToken: string, total: number): Promise<CheckResult> {
+export async function checkMissingOwner(accessToken: string, total: number, hubId: string): Promise<CheckResult> {
   // Note: initial fetch not needed here, using search API directly below
 
   // Use search API to filter for contacts with no owner
-  const searchRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const searchData = await hubspotContactSearch(accessToken, {
       filterGroups: [
         {
           filters: [
@@ -94,12 +166,7 @@ export async function checkMissingOwner(accessToken: string, total: number): Pro
           ],
         },
       ],
-      limit: 1,
-    }),
   });
-
-  if (!searchRes.ok) throw new Error("Search API failed for missing owner check");
-  const searchData = await searchRes.json();
 
   const count = searchData.total ?? 0;
   const percentage = total > 0 ? (count / total) * 100 : 0;
@@ -116,17 +183,12 @@ export async function checkMissingOwner(accessToken: string, total: number): Pro
       "Bulk assign orphaned contacts via list + workflow",
       "Review and update your lead routing workflows",
     ],
+    exampleRecords: mapContactExamples(hubId, searchData.results ?? []),
   };
 }
 
-export async function checkMissingLifecycleStage(accessToken: string, total: number): Promise<CheckResult> {
-  const searchRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+export async function checkMissingLifecycleStage(accessToken: string, total: number, hubId: string): Promise<CheckResult> {
+  const searchData = await hubspotContactSearch(accessToken, {
       filterGroups: [
         {
           filters: [
@@ -137,12 +199,7 @@ export async function checkMissingLifecycleStage(accessToken: string, total: num
           ],
         },
       ],
-      limit: 1,
-    }),
   });
-
-  if (!searchRes.ok) throw new Error("Search API failed for lifecycle stage check");
-  const searchData = await searchRes.json();
 
   const count = searchData.total ?? 0;
   const percentage = total > 0 ? (count / total) * 100 : 0;
@@ -159,21 +216,16 @@ export async function checkMissingLifecycleStage(accessToken: string, total: num
       "Create a workflow to auto-set lifecycle stage based on form submissions",
       "Bulk update existing contacts missing lifecycle stage via list",
     ],
+    exampleRecords: mapContactExamples(hubId, searchData.results ?? []),
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function checkUnassignedNewLeads(accessToken: string, _total: number): Promise<CheckResult> {
+export async function checkUnassignedNewLeads(accessToken: string, _total: number, hubId: string): Promise<CheckResult> {
   // HubSpot search API requires timestamps in milliseconds as strings
   const sevenDaysAgo = String(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  const searchRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const searchData = await hubspotContactSearch(accessToken, {
       filterGroups: [
         {
           filters: [
@@ -189,12 +241,7 @@ export async function checkUnassignedNewLeads(accessToken: string, _total: numbe
           ],
         },
       ],
-      limit: 1,
-    }),
   });
-
-  if (!searchRes.ok) throw new Error("Search API failed for unassigned leads check");
-  const searchData = await searchRes.json();
 
   // Get total new contacts in last 7 days
   const totalNewRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
@@ -237,17 +284,12 @@ export async function checkUnassignedNewLeads(accessToken: string, _total: numbe
       "Create SLA alerts for unassigned leads older than 24 hours",
       "Review form submission workflows to ensure proper routing",
     ],
+    exampleRecords: mapContactExamples(hubId, searchData.results ?? []),
   };
 }
 
-export async function checkUTMGaps(accessToken: string, total: number): Promise<CheckResult> {
-  const searchRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+export async function checkUTMGaps(accessToken: string, total: number, hubId: string): Promise<CheckResult> {
+  const searchData = await hubspotContactSearch(accessToken, {
       filterGroups: [
         {
           filters: [
@@ -267,12 +309,7 @@ export async function checkUTMGaps(accessToken: string, total: number): Promise<
           ],
         },
       ],
-      limit: 1,
-    }),
   });
-
-  if (!searchRes.ok) throw new Error("Search API failed for UTM gaps check");
-  const searchData = await searchRes.json();
 
   const count = searchData.total ?? 0;
   const percentage = total > 0 ? (count / total) * 100 : 0;
@@ -289,19 +326,21 @@ export async function checkUTMGaps(accessToken: string, total: number): Promise<
       "Add hidden UTM fields to all forms",
       "Review offline import processes and add source tagging",
     ],
+    exampleRecords: mapContactExamples(hubId, searchData.results ?? []),
   };
 }
 
 export async function runAllChecks(accessToken: string): Promise<CheckResult[]> {
   // Fetch total once upfront and inject into checks that need it
   const total = await getTotalContacts(accessToken);
+  const hubId = await getHubId(accessToken);
 
   const results = await Promise.allSettled([
-    checkDuplicateContacts(accessToken, total),
-    checkMissingOwner(accessToken, total),
-    checkMissingLifecycleStage(accessToken, total),
-    checkUnassignedNewLeads(accessToken, total),
-    checkUTMGaps(accessToken, total),
+    checkDuplicateContacts(accessToken, total, hubId),
+    checkMissingOwner(accessToken, total, hubId),
+    checkMissingLifecycleStage(accessToken, total, hubId),
+    checkUnassignedNewLeads(accessToken, total, hubId),
+    checkUTMGaps(accessToken, total, hubId),
   ]);
 
   return results
