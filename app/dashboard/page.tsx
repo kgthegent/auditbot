@@ -26,6 +26,7 @@ interface PortalData {
 function DashboardPageInner() {
   const searchParams = useSearchParams();
   const hubId = searchParams.get("hub_id");
+  const auditId = searchParams.get("audit_id");
 
   const [portal, setPortal] = useState<PortalData | null>(null);
   const [portalLoading, setPortalLoading] = useState(true);
@@ -35,6 +36,7 @@ function DashboardPageInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workflowSaving, setWorkflowSaving] = useState<string | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   const [emailCaptured, setEmailCaptured] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -188,8 +190,20 @@ function DashboardPageInner() {
 
   useEffect(() => {
     if (!hubId) {
-      setPortalLoading(false);
-      setPortalError("No hub_id provided");
+      fetch("/api/auth/me")
+        .then((r) => r.json())
+        .then((data: { authenticated?: boolean; hub_id?: string | null }) => {
+          if (data.authenticated && data.hub_id) {
+            window.location.href = `/dashboard?hub_id=${encodeURIComponent(data.hub_id)}`;
+            return;
+          }
+          setPortalLoading(false);
+          setPortalError("No connected platform selected");
+        })
+        .catch(() => {
+          setPortalLoading(false);
+          setPortalError("No connected platform selected");
+        });
       return;
     }
 
@@ -212,6 +226,21 @@ function DashboardPageInner() {
 
     fetchPortal();
   }, [hubId]);
+
+  useEffect(() => {
+    if (!auditId || !portal) return;
+
+    setAuditLoading(true);
+    setError(null);
+    fetch(`/api/audit/${auditId}`)
+      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error || "Could not load audit");
+        setAudit(data);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load audit"))
+      .finally(() => setAuditLoading(false));
+  }, [auditId, portal]);
 
   if (portalLoading) {
     return (
@@ -316,6 +345,16 @@ function DashboardPageInner() {
   const portalDisplayName =
     portal?.portal_name ||
     (portal ? `${platformConfig.name} ${platformConfig.productNoun} ${portal.hub_id}` : "");
+  const historyHref = portal
+    ? `/dashboard/history?portal_id=${encodeURIComponent(portal.id)}&hub_id=${encodeURIComponent(portal.hub_id)}`
+    : hubId
+    ? `/dashboard/history?hub_id=${encodeURIComponent(hubId)}`
+    : "/dashboard/history";
+  const reportHref = audit
+    ? audit.report_token
+      ? `/reports/${audit.audit_id}?token=${audit.report_token}`
+      : `/reports/${audit.audit_id}`
+    : null;
   const workflowCounts = audit?.checks.reduce(
     (counts, check) => {
       if (check.status === "pass") return counts;
@@ -367,7 +406,7 @@ function DashboardPageInner() {
           </a>
           <div className="flex items-center gap-4">
             <a
-              href="/dashboard/history"
+              href={historyHref}
               className="text-sm text-zinc-400 hover:text-white transition-colors"
             >
               History
@@ -406,6 +445,12 @@ function DashboardPageInner() {
           </button>
         </div>
 
+        {auditLoading && (
+          <div className="mb-6 rounded-lg border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
+            Loading selected audit...
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-4 mb-6 text-sm">
             {error}
@@ -425,7 +470,7 @@ function DashboardPageInner() {
           <>
             <AuditScore score={audit.score} />
 
-            {audit.report_token && (
+            {reportHref && (
               <div className="mt-6 rounded-xl border border-brand/30 bg-brand/10 p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -437,7 +482,7 @@ function DashboardPageInner() {
                     </p>
                   </div>
                   <a
-                    href={`/reports/${audit.audit_id}?token=${audit.report_token}`}
+                    href={reportHref}
                     className="inline-flex justify-center rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
                   >
                     Open Report
@@ -468,6 +513,38 @@ function DashboardPageInner() {
                 ))}
               </div>
             )}
+
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              <a
+                href={reportHref ?? "#"}
+                className={`rounded-xl border p-4 transition-colors ${
+                  reportHref
+                    ? "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
+                    : "pointer-events-none border-zinc-900 bg-zinc-950 text-zinc-700"
+                }`}
+              >
+                <p className="text-sm font-semibold text-white">Share report</p>
+                <p className="mt-1 text-xs leading-5 text-zinc-500">Open the executive summary for buyers and stakeholders.</p>
+              </a>
+              <a
+                href={historyHref}
+                className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 transition-colors hover:border-zinc-700"
+              >
+                <p className="text-sm font-semibold text-white">View history</p>
+                <p className="mt-1 text-xs leading-5 text-zinc-500">Compare score movement and previous audit runs.</p>
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  if (portal) runAudit(portal.id, portal.hub_id);
+                }}
+                disabled={loading}
+                className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-left transition-colors hover:border-zinc-700 disabled:opacity-60"
+              >
+                <p className="text-sm font-semibold text-white">Re-run audit</p>
+                <p className="mt-1 text-xs leading-5 text-zinc-500">Confirm whether marked fixes changed the source data.</p>
+              </button>
+            </div>
 
             {/* Plan Banner */}
             {portal?.plan === "free" && (
@@ -552,11 +629,36 @@ function DashboardPageInner() {
         )}
 
         {!audit && !loading && !error && (
-          <div className="text-center py-20 text-zinc-600">
-            <p className="text-lg">No audit results yet</p>
-            <p className="text-sm mt-2">
-              Click &quot;Run Audit&quot; to scan your {platformConfig.name} {platformConfig.productNoun}
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-8">
+            <p className="text-xs font-semibold uppercase tracking-wider text-brand">
+              First audit
             </p>
+            <h2 className="mt-3 text-2xl font-bold">Turn this connection into a fix plan.</h2>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">
+              We will scan your {platformConfig.name} {platformConfig.productNoun}, rank the riskiest records, and generate a report you can share with an operator or leadership team.
+            </p>
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              {[
+                ["1", "Run scan", "Read-only checks across owners, lifecycle, source, and duplicate signals."],
+                ["2", "Assign fixes", "Give every issue an owner, date, and operating note."],
+                ["3", "Share proof", "Send a leadership-ready report and track changes over time."],
+              ].map(([step, title, body]) => (
+                <div key={step} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+                  <p className="text-xs font-bold text-brand">Step {step}</p>
+                  <p className="mt-2 text-sm font-semibold text-white">{title}</p>
+                  <p className="mt-1 text-xs leading-5 text-zinc-500">{body}</p>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                if (portal) runAudit(portal.id, portal.hub_id);
+              }}
+              disabled={loading}
+              className="mt-6 rounded-lg bg-brand px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+            >
+              Run my first audit
+            </button>
           </div>
         )}
       </main>

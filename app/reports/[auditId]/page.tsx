@@ -81,6 +81,9 @@ function ReportPageInner() {
       failed: checks.filter((check) => check.status === "fail").length,
       warnings: checks.filter((check) => check.status === "warn").length,
       affectedRecords: actionable.reduce((total, check) => total + check.count, 0),
+      fixed: actionable.filter((check) => check.workflowStatus === "fixed").length,
+      ownerGaps: actionable.filter((check) => !check.assignedTo && check.workflowStatus !== "fixed").length,
+      dueGaps: actionable.filter((check) => !check.dueAt && check.workflowStatus !== "fixed").length,
       workflow,
       topRisks,
     };
@@ -238,7 +241,19 @@ function ReportPageInner() {
             <p className="mt-4 text-sm leading-6 text-zinc-400">
               Prioritize the top open high-severity findings first, assign an owner for every unresolved item, and review progress weekly until the score is above 90.
             </p>
-            <div className="mt-5 rounded-lg border border-brand/25 bg-brand/10 p-4">
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              {[
+                ["Owner gaps", summary.ownerGaps],
+                ["Due date gaps", summary.dueGaps],
+                ["Confirmed fixed", summary.fixed],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
+                  <p className="text-xs uppercase tracking-wider text-zinc-600">{label}</p>
+                  <p className="mt-2 text-2xl font-bold text-white">{value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 rounded-lg border border-brand/25 bg-brand/10 p-4">
               <p className="text-sm font-semibold text-brand">
                 Suggested next meeting topic
               </p>
@@ -246,6 +261,22 @@ function ReportPageInner() {
                 Resolve {summary.workflow.open + summary.workflow.in_progress} active stack hygiene items affecting {summary.affectedRecords.toLocaleString()} records.
               </p>
             </div>
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+          <h2 className="text-lg font-semibold">30-Day Fix Plan</h2>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            {[
+              ["Week 1", "Assign every open high-severity item, confirm source-system owner rules, and clean the largest affected record set."],
+              ["Week 2", "Bulk update known bad records, add routing or lifecycle automation guardrails, and document ownership exceptions."],
+              ["Week 3-4", "Re-run StackAudit, verify score movement, and move recurring checks into weekly monitoring."],
+            ].map(([title, body]) => (
+              <div key={title} className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+                <p className="text-sm font-semibold text-brand">{title}</p>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">{body}</p>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -338,6 +369,31 @@ function ReportPageInner() {
                 </div>
               ))
             )}
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+          <h2 className="text-lg font-semibold">Complete Audit Inventory</h2>
+          <div className="mt-5 overflow-hidden rounded-xl border border-zinc-800">
+            <div className="grid grid-cols-[1.3fr_90px_90px_100px] gap-3 bg-zinc-950 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-600">
+              <span>Check</span>
+              <span>Status</span>
+              <span>Records</span>
+              <span>Owner</span>
+            </div>
+            {report.checks.map((check) => (
+              <div
+                key={check.id ?? check.checkName}
+                className="grid grid-cols-[1.3fr_90px_90px_100px] gap-3 border-t border-zinc-800 px-4 py-3 text-sm"
+              >
+                <span className="min-w-0 truncate text-zinc-200">{check.checkName}</span>
+                <span className={check.status === "pass" ? "text-emerald-300" : check.status === "fail" ? "text-red-300" : "text-yellow-300"}>
+                  {check.status}
+                </span>
+                <span className="text-zinc-400">{check.count.toLocaleString()}</span>
+                <span className="min-w-0 truncate text-zinc-500">{check.assignedTo || "Unassigned"}</span>
+              </div>
+            ))}
           </div>
         </section>
       </main>

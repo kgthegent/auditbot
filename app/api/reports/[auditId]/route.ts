@@ -58,38 +58,79 @@ export async function GET(
   const token = req.nextUrl.searchParams.get("token");
   const authUser = await getAuthUser(req);
 
-  const { data: audit, error: auditError } = await supabaseAdmin
+  let { data: audit, error: auditError } = await supabaseAdmin
     .from("audits")
     .select("id, portal_id, score, report_token, created_at, completed_at")
     .eq("id", params.auditId)
     .single();
 
+  if (auditError?.message?.includes("report_token")) {
+    const fallback = await supabaseAdmin
+      .from("audits")
+      .select("id, portal_id, score, created_at, completed_at")
+      .eq("id", params.auditId)
+      .single();
+
+    audit = fallback.data ? { ...fallback.data, report_token: null } : null;
+    auditError = fallback.error;
+  }
+
   if (auditError || !audit) {
     return NextResponse.json({ error: "Report not found" }, { status: 404 });
   }
 
-  const { data: portal, error: portalError } = await supabaseAdmin
+  let { data: portal, error: portalError } = await supabaseAdmin
     .from("portals")
     .select("id, hub_id, portal_name, platform, user_id")
     .eq("id", audit.portal_id)
     .single();
 
+  if (portalError?.message?.includes("platform")) {
+    const fallback = await supabaseAdmin
+      .from("portals")
+      .select("id, hub_id, portal_name, user_id")
+      .eq("id", audit.portal_id)
+      .single();
+
+    portal = fallback.data ? { ...fallback.data, platform: "hubspot" } : null;
+    portalError = fallback.error;
+  }
+
   if (portalError || !portal) {
     return NextResponse.json({ error: "Report not found" }, { status: 404 });
   }
 
-  const hasShareToken = !!token && token === audit.report_token;
+  const hasShareToken = !!audit.report_token && !!token && token === audit.report_token;
   const isOwner = !!authUser && portal.user_id === authUser.id;
 
   if (!hasShareToken && !isOwner) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: checks, error: checksError } = await supabaseAdmin
+  let { data: checks, error: checksError } = await supabaseAdmin
     .from("audit_checks")
     .select("id, check_name, severity, count, percentage, status, description, fix_steps, example_records, workflow_status, assigned_to, due_at, notes, resolved_at")
     .eq("audit_id", audit.id)
     .order("severity", { ascending: true });
+
+  if (checksError?.message?.includes("example_records") || checksError?.message?.includes("workflow_status")) {
+    const fallback = await supabaseAdmin
+      .from("audit_checks")
+      .select("id, check_name, severity, count, percentage, status, description, fix_steps")
+      .eq("audit_id", audit.id)
+      .order("severity", { ascending: true });
+
+    checks = fallback.data?.map((row) => ({
+      ...row,
+      example_records: [],
+      workflow_status: "open",
+      assigned_to: null,
+      due_at: null,
+      notes: "",
+      resolved_at: null,
+    })) ?? null;
+    checksError = fallback.error;
+  }
 
   if (checksError) {
     return NextResponse.json({ error: "Failed to load report" }, { status: 500 });

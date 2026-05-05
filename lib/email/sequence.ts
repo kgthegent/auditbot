@@ -2,7 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase/client";
 
 const AGENTMAIL_API_KEY = process.env.AGENTMAIL_API_KEY!;
 const FROM_INBOX = "auditbot@agentmail.to";
-const APP_URL = "https://auditbot-zeta.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://getstackaudit.app";
 
 export async function sendEmail(to: string, subject: string, htmlBody: string) {
   const encodedInbox = encodeURIComponent(FROM_INBOX);

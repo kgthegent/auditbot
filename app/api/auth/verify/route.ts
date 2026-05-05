@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { setSessionCookies } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabase/client";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://auditbot-zeta.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://getstackaudit.app";
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");

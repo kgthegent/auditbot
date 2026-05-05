@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase/client";
 import { sendEmail } from "@/lib/email/sequence";
 import { randomBytes } from "crypto";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://auditbot-zeta.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://getstackaudit.app";
 
 export async function POST(req: NextRequest) {
   const { email } = await req.json();

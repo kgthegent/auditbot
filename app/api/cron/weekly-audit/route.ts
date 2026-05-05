@@ -9,6 +9,8 @@ import { getPlatformConfig } from "@/lib/platforms";
 import { calculateScore } from "@/lib/audit/score";
 import { sendEmail } from "@/lib/email/sequence";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://getstackaudit.app";
+
 function createReportToken() {
   return randomBytes(24).toString("hex");
 }
@@ -40,19 +42,29 @@ export async function GET(req: NextRequest) {
 
     try {
       // Run audit
-      const { data: audit } = await supabaseAdmin
+      let { data: audit, error: auditError } = await supabaseAdmin
         .from("audits")
         .insert({ portal_id: portal.id, score: 0, report_token: createReportToken() })
         .select()
         .single();
 
-      if (!audit) continue;
+      if (auditError?.message?.includes("report_token")) {
+        const fallback = await supabaseAdmin
+          .from("audits")
+          .insert({ portal_id: portal.id, score: 0 })
+          .select()
+          .single();
+        audit = fallback.data;
+        auditError = fallback.error;
+      }
+
+      if (auditError || !audit) continue;
 
       const platformConfig = getPlatformConfig(portal.platform);
       const checks = await runPlatformAudit(portal);
       const score = calculateScore(checks);
 
-      await supabaseAdmin.from("audit_checks").insert(
+      const { error: checkInsertError } = await supabaseAdmin.from("audit_checks").insert(
         checks.map((c) => ({
           audit_id: audit.id,
           check_name: c.checkName,
@@ -66,13 +78,28 @@ export async function GET(req: NextRequest) {
         }))
       );
 
+      if (checkInsertError?.message?.includes("example_records")) {
+        await supabaseAdmin.from("audit_checks").insert(
+          checks.map((c) => ({
+            audit_id: audit.id,
+            check_name: c.checkName,
+            severity: c.severity,
+            count: c.count,
+            percentage: c.percentage,
+            status: c.status,
+            description: c.description,
+            fix_steps: c.fixSteps,
+          }))
+        );
+      }
+
       await supabaseAdmin
         .from("audits")
         .update({ score, completed_at: new Date().toISOString() })
         .eq("id", audit.id);
 
       // Send weekly digest email
-      const dashUrl = `https://auditbot-zeta.vercel.app/dashboard?hub_id=${portal.hub_id}`;
+      const dashUrl = `${APP_URL}/dashboard?hub_id=${portal.hub_id}`;
       const failedChecks = checks.filter((c) => c.status === "fail").length;
       const warnChecks = checks.filter((c) => c.status === "warn").length;
 
@@ -104,7 +131,7 @@ export async function GET(req: NextRequest) {
     </div>
   </div>
   <div style="padding:24px;text-align:center;color:#999;font-size:12px;border-top:1px solid #eee;">
-    StackAudit by Village Consulting · <a href="https://auditbot-zeta.vercel.app/unsubscribe?email=${encodeURIComponent(user.email)}" style="color:#999;">Unsubscribe</a>
+    StackAudit by Village Consulting · <a href="${APP_URL}/unsubscribe?email=${encodeURIComponent(user.email)}" style="color:#999;">Unsubscribe</a>
   </div>
 </div>
 </body></html>`;

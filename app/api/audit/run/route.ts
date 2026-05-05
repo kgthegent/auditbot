@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       audit_id: audit.id,
-      report_token: audit.report_token ?? reportToken,
+      report_token: audit.report_token ?? null,
       score,
       checks: savedChecks.map(mapCheckRow),
     });
