@@ -6,9 +6,13 @@ import { useSearchParams } from "next/navigation";
 function SalesforceConnectInner() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
+  const salesforceError = searchParams.get("sf_error");
+  const salesforceMessage = searchParams.get("sf_message");
   const errorMessage =
-    error === "missing_code"
-      ? "Authorization was cancelled. Please try again."
+    error === "salesforce_denied"
+      ? "Salesforce did not authorize the connection."
+      : error === "missing_code"
+      ? "Salesforce returned without an authorization code. This often means the org or Connected App blocked access."
       : error === "missing_verifier"
       ? "The Salesforce login session expired. Start the connection again."
       : error === "db_not_ready"
@@ -38,8 +42,29 @@ function SalesforceConnectInner() {
           </p>
 
           {errorMessage && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-4 mb-6 text-sm">
-              {errorMessage}
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-4 mb-6 text-left text-sm">
+              <p className="font-semibold">{errorMessage}</p>
+              {salesforceError && (
+                <p className="mt-2 text-red-300">
+                  Salesforce error: {salesforceError}
+                </p>
+              )}
+              {salesforceMessage && (
+                <p className="mt-1 text-red-300">
+                  {salesforceMessage}
+                </p>
+              )}
+              {(error === "salesforce_denied" || error === "missing_code") && (
+                <div className="mt-3 rounded-md border border-red-500/20 bg-black/20 p-3 text-zinc-300">
+                  <p className="font-semibold text-zinc-200">Ask your Salesforce admin to confirm:</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    <li>The Connected App is installed or allowed for your org.</li>
+                    <li>Your user is permitted to use the Connected App.</li>
+                    <li>The OAuth scopes include API access and refresh tokens.</li>
+                    <li>The callback URL matches https://getstackaudit.app/api/connect/salesforce/callback.</li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 

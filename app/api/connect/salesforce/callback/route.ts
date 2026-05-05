@@ -5,7 +5,19 @@ import { supabaseAdmin } from "@/lib/supabase/client";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
+  const salesforceError = request.nextUrl.searchParams.get("error");
+  const salesforceErrorDescription = request.nextUrl.searchParams.get("error_description");
   const codeVerifier = request.cookies.get("sf_code_verifier")?.value;
+
+  if (salesforceError) {
+    const redirect = new URL("/connect/salesforce", request.url);
+    redirect.searchParams.set("error", "salesforce_denied");
+    redirect.searchParams.set("sf_error", salesforceError);
+    if (salesforceErrorDescription) {
+      redirect.searchParams.set("sf_message", salesforceErrorDescription);
+    }
+    return NextResponse.redirect(redirect);
+  }
 
   if (!code) {
     return NextResponse.redirect(
