@@ -1,4 +1,7 @@
-import { NextResponse } from "next/server";
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/client";
 import { sendEmail, getEmailHtml, getSubjectForStep } from "@/lib/email/sequence";
 
@@ -12,7 +15,24 @@ const NEXT_DELAY_DAYS: Record<number, number> = {
   2: 4, // after sending step 2, schedule step 3 in 4 more days
 };
 
-export async function GET() {
+function isAuthorizedCronRequest(request: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+
+  const headerSecret = request.headers.get("x-cron-secret");
+  const bearerToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  return headerSecret === cronSecret || bearerToken === cronSecret;
+}
+
+export async function GET(request: NextRequest) {
+  if (!process.env.CRON_SECRET) {
+    return NextResponse.json({ error: "Cron secret is not configured" }, { status: 503 });
+  }
+
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { data: sequences, error } = await supabaseAdmin
       .from("email_sequences")

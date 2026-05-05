@@ -15,10 +15,22 @@ function createReportToken() {
   return randomBytes(24).toString("hex");
 }
 
-// Called by Vercel Cron — secured by CRON_SECRET header
+function isAuthorizedCronRequest(req: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+
+  const headerSecret = req.headers.get("x-cron-secret");
+  const bearerToken = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  return headerSecret === cronSecret || bearerToken === cronSecret;
+}
+
+// Called by Vercel Cron and secured by CRON_SECRET.
 export async function GET(req: NextRequest) {
-  const secret = req.headers.get("x-cron-secret");
-  if (secret !== process.env.CRON_SECRET) {
+  if (!process.env.CRON_SECRET) {
+    return NextResponse.json({ error: "Cron secret is not configured" }, { status: 503 });
+  }
+
+  if (!isAuthorizedCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
