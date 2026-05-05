@@ -54,7 +54,7 @@ export default function CheckCard({
       dueAt?: string | null;
       notes?: string;
     }
-  ) => void;
+  ) => Promise<boolean | void> | boolean | void;
 }) {
   const workflowStatus = check.workflowStatus ?? "open";
   const showWorkflow = check.status !== "pass" && !!onWorkflowChange;
@@ -65,6 +65,7 @@ export default function CheckCard({
   const [dueDay, setDueDay] = useState(initialDueDate.day);
   const [dueYear, setDueYear] = useState(initialDueDate.year);
   const [notes, setNotes] = useState(check.notes ?? "");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   useEffect(() => {
     const nextDueDate = parseDateParts(check.dueAt);
@@ -74,17 +75,22 @@ export default function CheckCard({
     setDueDay(nextDueDate.day);
     setDueYear(nextDueDate.year);
     setNotes(check.notes ?? "");
+    setSaveState("idle");
   }, [check.assignedTo, check.dueAt, check.notes, check.workflowStatus]);
 
   const dueAt = formatDateParts(dueYear, dueMonth, dueDay);
 
-  const saveWorkflow = (nextStatus = draftStatus) => {
-    onWorkflowChange?.(check, {
+  const saveWorkflow = async (nextStatus = draftStatus) => {
+    if (!onWorkflowChange) return;
+
+    setSaveState("saving");
+    const result = await onWorkflowChange(check, {
       workflowStatus: nextStatus,
       assignedTo,
       dueAt,
       notes,
     });
+    setSaveState(result === false ? "error" : "saved");
   };
 
   return (
@@ -117,7 +123,10 @@ export default function CheckCard({
               <button
                 key={status}
                 type="button"
-                onClick={() => setDraftStatus(status)}
+                onClick={() => {
+                  setDraftStatus(status);
+                  setSaveState("idle");
+                }}
                 className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${
                   draftStatus === status
                     ? "border-brand bg-brand/15 text-brand"
@@ -128,46 +137,61 @@ export default function CheckCard({
               </button>
             ))}
           </div>
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px]">
+          <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(260px,0.55fr)]">
             <input
               value={assignedTo}
-              onChange={(event) => setAssignedTo(event.currentTarget.value)}
+              onChange={(event) => {
+                setAssignedTo(event.currentTarget.value);
+                setSaveState("idle");
+              }}
               placeholder="Assign owner"
-              className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
+              className="min-w-0 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
             />
-            <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.25fr)] gap-2">
               <input
                 inputMode="numeric"
                 maxLength={2}
                 value={dueMonth}
-                onChange={(event) => setDueMonth(cleanDateNumber(event.currentTarget.value, 2))}
+                onChange={(event) => {
+                  setDueMonth(cleanDateNumber(event.currentTarget.value, 2));
+                  setSaveState("idle");
+                }}
                 placeholder="MM"
                 aria-label="Due month"
-                className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
+                className="min-w-0 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
               />
               <input
                 inputMode="numeric"
                 maxLength={2}
                 value={dueDay}
-                onChange={(event) => setDueDay(cleanDateNumber(event.currentTarget.value, 2))}
+                onChange={(event) => {
+                  setDueDay(cleanDateNumber(event.currentTarget.value, 2));
+                  setSaveState("idle");
+                }}
                 placeholder="DD"
                 aria-label="Due day"
-                className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
+                className="min-w-0 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
               />
               <input
                 inputMode="numeric"
                 maxLength={4}
                 value={dueYear}
-                onChange={(event) => setDueYear(cleanDateNumber(event.currentTarget.value, 4))}
+                onChange={(event) => {
+                  setDueYear(cleanDateNumber(event.currentTarget.value, 4));
+                  setSaveState("idle");
+                }}
                 placeholder="YYYY"
                 aria-label="Due year"
-                className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
+                className="min-w-0 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
               />
             </div>
           </div>
           <textarea
             value={notes}
-            onChange={(event) => setNotes(event.currentTarget.value)}
+            onChange={(event) => {
+              setNotes(event.currentTarget.value);
+              setSaveState("idle");
+            }}
             placeholder="Add ops notes"
             rows={2}
             className="mt-2 w-full resize-none rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
@@ -176,15 +200,17 @@ export default function CheckCard({
             <button
               type="button"
               onClick={() => saveWorkflow()}
+              disabled={saveState === "saving"}
               className="rounded-md bg-brand px-3 py-2 text-xs font-semibold text-black transition-colors hover:bg-brand/90"
             >
-              Save plan
+              {saveState === "saving" ? "Saving..." : "Save plan"}
             </button>
             <button
               type="button"
-              onClick={() => {
+              disabled={saveState === "saving"}
+              onClick={async () => {
                 setDraftStatus("fixed");
-                saveWorkflow("fixed");
+                await saveWorkflow("fixed");
               }}
               className="rounded-md border border-emerald-500/40 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10"
             >
@@ -192,14 +218,25 @@ export default function CheckCard({
             </button>
             <button
               type="button"
-              onClick={() => {
+              disabled={saveState === "saving"}
+              onClick={async () => {
                 setDraftStatus("ignored");
-                saveWorkflow("ignored");
+                await saveWorkflow("ignored");
               }}
               className="rounded-md border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
             >
               Ignore
             </button>
+            {saveState === "saved" && (
+              <span className="self-center text-xs font-semibold text-emerald-300">
+                Plan saved
+              </span>
+            )}
+            {saveState === "error" && (
+              <span className="self-center text-xs font-semibold text-red-300">
+                Save failed
+              </span>
+            )}
           </div>
         </div>
       )}

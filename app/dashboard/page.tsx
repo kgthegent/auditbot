@@ -178,9 +178,11 @@ function DashboardPageInner() {
               }
             : current
         );
+        return true;
       } catch (err) {
         setAudit(previousAudit);
         setError(err instanceof Error ? err.message : "Failed to update finding");
+        return false;
       } finally {
         setWorkflowSaving(null);
       }

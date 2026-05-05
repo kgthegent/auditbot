@@ -128,7 +128,84 @@ function ReportPageInner() {
   const portalName = report.portal.name || `${platform.name} ${platform.productNoun}`;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
+    <div className="stack-report min-h-screen bg-zinc-950 text-white">
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: letter;
+            margin: 0.55in;
+          }
+
+          html,
+          body {
+            background: #ffffff !important;
+          }
+
+          .stack-report {
+            background: #ffffff !important;
+            color: #111827 !important;
+            font-size: 11px;
+          }
+
+          .stack-report main {
+            max-width: none !important;
+            padding: 0 !important;
+          }
+
+          .stack-report section,
+          .stack-report .print-panel,
+          .stack-report .print-row {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .stack-report section,
+          .stack-report [class*="bg-zinc-9"],
+          .stack-report [class*="bg-zinc-8"],
+          .stack-report [class*="bg-brand"] {
+            background: #ffffff !important;
+          }
+
+          .stack-report [class*="border-zinc"],
+          .stack-report [class*="border-brand"] {
+            border-color: #d1d5db !important;
+          }
+
+          .stack-report [class*="text-white"],
+          .stack-report [class*="text-zinc-200"],
+          .stack-report [class*="text-zinc-300"],
+          .stack-report [class*="text-zinc-400"],
+          .stack-report [class*="text-zinc-500"],
+          .stack-report [class*="text-zinc-600"] {
+            color: #111827 !important;
+          }
+
+          .stack-report p,
+          .stack-report li,
+          .stack-report span {
+            color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          .stack-report h1 {
+            font-size: 28px !important;
+            line-height: 1.15 !important;
+          }
+
+          .stack-report h2 {
+            font-size: 16px !important;
+          }
+
+          .stack-report .print-grid {
+            display: grid !important;
+          }
+
+          .stack-report .print-table {
+            font-size: 10px !important;
+          }
+        }
+      `}</style>
       <nav className="border-b border-zinc-800 px-6 py-4 print:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <a href="/" className="text-xl font-bold text-brand">
@@ -162,7 +239,7 @@ function ReportPageInner() {
       </nav>
 
       <main className="mx-auto max-w-6xl px-6 py-10 print:max-w-none">
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-8">
+        <section className="print-panel rounded-2xl border border-zinc-800 bg-zinc-900 p-8">
           <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
             <div>
               <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -196,22 +273,22 @@ function ReportPageInner() {
           </div>
         </section>
 
-        <section className="mt-6 grid gap-4 md:grid-cols-4">
+        <section className="print-grid mt-6 grid gap-4 md:grid-cols-4">
           {[
             ["Issues", summary.issues, "text-white"],
             ["Failed", summary.failed, "text-red-300"],
             ["Warnings", summary.warnings, "text-yellow-300"],
             ["Affected Records", summary.affectedRecords.toLocaleString(), "text-cyan-300"],
           ].map(([label, value, color]) => (
-            <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+            <div key={label} className="print-panel rounded-xl border border-zinc-800 bg-zinc-900 p-5">
               <p className="text-xs uppercase tracking-wider text-zinc-600">{label}</p>
               <p className={`mt-3 text-3xl font-bold ${color}`}>{value}</p>
             </div>
           ))}
         </section>
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <section className="print-grid mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="print-panel rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
             <h2 className="text-lg font-semibold">Cleanup Progress</h2>
             <div className="mt-5 space-y-3">
               {[
@@ -236,7 +313,7 @@ function ReportPageInner() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+          <div className="print-panel rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
             <h2 className="text-lg font-semibold">Recommended Leadership Ask</h2>
             <p className="mt-4 text-sm leading-6 text-zinc-400">
               Prioritize the top open high-severity findings first, assign an owner for every unresolved item, and review progress weekly until the score is above 90.
@@ -264,7 +341,7 @@ function ReportPageInner() {
           </div>
         </section>
 
-        <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <section className="print-panel mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <h2 className="text-lg font-semibold">30-Day Fix Plan</h2>
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             {[
@@ -280,7 +357,7 @@ function ReportPageInner() {
           </div>
         </section>
 
-        <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <section className="print-panel mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <h2 className="text-lg font-semibold">Top Risks</h2>
           <div className="mt-5 space-y-3">
             {summary.topRisks.length === 0 ? (
@@ -289,7 +366,7 @@ function ReportPageInner() {
               summary.topRisks.map((check) => (
                 <div
                   key={check.id ?? check.checkName}
-                  className="rounded-xl border border-zinc-800 bg-zinc-950 p-4"
+                  className="print-row rounded-xl border border-zinc-800 bg-zinc-950 p-4"
                 >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
@@ -372,9 +449,9 @@ function ReportPageInner() {
           </div>
         </section>
 
-        <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <section className="print-panel mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
           <h2 className="text-lg font-semibold">Complete Audit Inventory</h2>
-          <div className="mt-5 overflow-hidden rounded-xl border border-zinc-800">
+          <div className="print-table mt-5 overflow-hidden rounded-xl border border-zinc-800">
             <div className="grid grid-cols-[1.3fr_90px_90px_100px] gap-3 bg-zinc-950 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-600">
               <span>Check</span>
               <span>Status</span>
