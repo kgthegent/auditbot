@@ -80,6 +80,16 @@ export async function PATCH(
     .single();
 
   if (updateError || !updatedCheck) {
+    if (isMissingWorkflowSchema(updateError?.message)) {
+      return NextResponse.json(
+        {
+          error:
+            "Workflow tracking is not enabled in the database yet. Run the audit workflow migration, then try again.",
+        },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json({ error: "Failed to update check" }, { status: 500 });
   }
 
@@ -101,4 +111,16 @@ export async function PATCH(
       resolvedAt: updatedCheck.resolved_at,
     },
   });
+}
+
+function isMissingWorkflowSchema(message?: string) {
+  if (!message) return false;
+  return [
+    "workflow_status",
+    "assigned_to",
+    "due_at",
+    "notes",
+    "resolved_at",
+    "example_records",
+  ].some((column) => message.includes(column));
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { CheckResult, WorkflowStatus } from "@/types";
 
 const SEVERITY_STYLES = {
@@ -57,6 +58,34 @@ export default function CheckCard({
 }) {
   const workflowStatus = check.workflowStatus ?? "open";
   const showWorkflow = check.status !== "pass" && !!onWorkflowChange;
+  const initialDueDate = useMemo(() => parseDateParts(check.dueAt), [check.dueAt]);
+  const [draftStatus, setDraftStatus] = useState<WorkflowStatus>(workflowStatus);
+  const [assignedTo, setAssignedTo] = useState(check.assignedTo ?? "");
+  const [dueMonth, setDueMonth] = useState(initialDueDate.month);
+  const [dueDay, setDueDay] = useState(initialDueDate.day);
+  const [dueYear, setDueYear] = useState(initialDueDate.year);
+  const [notes, setNotes] = useState(check.notes ?? "");
+
+  useEffect(() => {
+    const nextDueDate = parseDateParts(check.dueAt);
+    setDraftStatus(check.workflowStatus ?? "open");
+    setAssignedTo(check.assignedTo ?? "");
+    setDueMonth(nextDueDate.month);
+    setDueDay(nextDueDate.day);
+    setDueYear(nextDueDate.year);
+    setNotes(check.notes ?? "");
+  }, [check.assignedTo, check.dueAt, check.notes, check.workflowStatus]);
+
+  const dueAt = formatDateParts(dueYear, dueMonth, dueDay);
+
+  const saveWorkflow = (nextStatus = draftStatus) => {
+    onWorkflowChange?.(check, {
+      workflowStatus: nextStatus,
+      assignedTo,
+      dueAt,
+      notes,
+    });
+  };
 
   return (
     <div className={`bg-zinc-900 border ${CARD_BORDER[check.status]} rounded-xl p-6`}>
@@ -87,9 +116,10 @@ export default function CheckCard({
             {(["open", "in_progress", "fixed", "ignored"] as WorkflowStatus[]).map((status) => (
               <button
                 key={status}
-                onClick={() => onWorkflowChange?.(check, { workflowStatus: status })}
+                type="button"
+                onClick={() => setDraftStatus(status)}
                 className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                  workflowStatus === status
+                  draftStatus === status
                     ? "border-brand bg-brand/15 text-brand"
                     : "border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
                 }`}
@@ -98,48 +128,79 @@ export default function CheckCard({
               </button>
             ))}
           </div>
-          <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px]">
             <input
-              defaultValue={check.assignedTo ?? ""}
-              onBlur={(event) =>
-                onWorkflowChange?.(check, {
-                  workflowStatus,
-                  assignedTo: event.currentTarget.value,
-                  dueAt: check.dueAt,
-                  notes: check.notes,
-                })
-              }
+              value={assignedTo}
+              onChange={(event) => setAssignedTo(event.currentTarget.value)}
               placeholder="Assign owner"
               className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
             />
-            <input
-              type="date"
-              value={check.dueAt?.slice(0, 10) ?? ""}
-              onChange={(event) =>
-                onWorkflowChange?.(check, {
-                  workflowStatus,
-                  assignedTo: check.assignedTo,
-                  dueAt: event.currentTarget.value || null,
-                  notes: check.notes,
-                })
-              }
-              className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-brand focus:outline-none"
-            />
+            <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2">
+              <input
+                inputMode="numeric"
+                maxLength={2}
+                value={dueMonth}
+                onChange={(event) => setDueMonth(cleanDateNumber(event.currentTarget.value, 2))}
+                placeholder="MM"
+                aria-label="Due month"
+                className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
+              />
+              <input
+                inputMode="numeric"
+                maxLength={2}
+                value={dueDay}
+                onChange={(event) => setDueDay(cleanDateNumber(event.currentTarget.value, 2))}
+                placeholder="DD"
+                aria-label="Due day"
+                className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
+              />
+              <input
+                inputMode="numeric"
+                maxLength={4}
+                value={dueYear}
+                onChange={(event) => setDueYear(cleanDateNumber(event.currentTarget.value, 4))}
+                placeholder="YYYY"
+                aria-label="Due year"
+                className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
+              />
+            </div>
           </div>
           <textarea
-            defaultValue={check.notes ?? ""}
-            onBlur={(event) =>
-              onWorkflowChange?.(check, {
-                workflowStatus,
-                assignedTo: check.assignedTo,
-                dueAt: check.dueAt,
-                notes: event.currentTarget.value,
-              })
-            }
+            value={notes}
+            onChange={(event) => setNotes(event.currentTarget.value)}
             placeholder="Add ops notes"
             rows={2}
             className="mt-2 w-full resize-none rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-brand focus:outline-none"
           />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => saveWorkflow()}
+              className="rounded-md bg-brand px-3 py-2 text-xs font-semibold text-black transition-colors hover:bg-brand/90"
+            >
+              Save plan
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDraftStatus("fixed");
+                saveWorkflow("fixed");
+              }}
+              className="rounded-md border border-emerald-500/40 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10"
+            >
+              Mark fixed
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDraftStatus("ignored");
+                saveWorkflow("ignored");
+              }}
+              className="rounded-md border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
+            >
+              Ignore
+            </button>
+          </div>
         </div>
       )}
 
@@ -215,4 +276,34 @@ export default function CheckCard({
       )}
     </div>
   );
+}
+
+function cleanDateNumber(value: string, length: number) {
+  return value.replace(/\D/g, "").slice(0, length);
+}
+
+function parseDateParts(value?: string | null) {
+  const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return { year: "", month: "", day: "" };
+  return { year: match[1], month: match[2], day: match[3] };
+}
+
+function formatDateParts(year: string, month: string, day: string) {
+  if (!year && !month && !day) return null;
+  if (year.length !== 4 || month.length === 0 || day.length === 0) return null;
+
+  const paddedMonth = month.padStart(2, "0");
+  const paddedDay = day.padStart(2, "0");
+  const date = new Date(`${year}-${paddedMonth}-${paddedDay}T00:00:00Z`);
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getUTCFullYear() !== Number(year) ||
+    date.getUTCMonth() + 1 !== Number(paddedMonth) ||
+    date.getUTCDate() !== Number(paddedDay)
+  ) {
+    return null;
+  }
+
+  return `${year}-${paddedMonth}-${paddedDay}`;
 }
