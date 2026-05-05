@@ -6,6 +6,18 @@ import { useSearchParams } from "next/navigation";
 function SalesforceConnectInner() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
+  const errorMessage =
+    error === "missing_code"
+      ? "Authorization was cancelled. Please try again."
+      : error === "missing_verifier"
+      ? "The Salesforce login session expired. Start the connection again."
+      : error === "db_not_ready"
+      ? "Salesforce needs the platform database migration before it can be connected."
+      : error === "salesforce_not_configured"
+      ? "Salesforce OAuth is not configured yet."
+      : error
+      ? "Something went wrong connecting to Salesforce. Please try again."
+      : null;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
@@ -25,11 +37,9 @@ function SalesforceConnectInner() {
             health audit on your leads, contacts, and opportunities.
           </p>
 
-          {error && (
+          {errorMessage && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-4 mb-6 text-sm">
-              {error === "missing_code"
-                ? "Authorization was cancelled. Please try again."
-                : "Something went wrong connecting to Salesforce. Please try again."}
+              {errorMessage}
             </div>
           )}
 

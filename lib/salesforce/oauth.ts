@@ -7,6 +7,20 @@ const clientId = () => process.env.SALESFORCE_CLIENT_ID!;
 const clientSecret = () => process.env.SALESFORCE_CLIENT_SECRET!;
 const redirectUri = () => process.env.SALESFORCE_REDIRECT_URI!;
 
+function requireSalesforceConfig() {
+  const missing = [
+    ["SALESFORCE_CLIENT_ID", clientId()],
+    ["SALESFORCE_CLIENT_SECRET", clientSecret()],
+    ["SALESFORCE_REDIRECT_URI", redirectUri()],
+  ]
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+
+  if (missing.length > 0) {
+    throw new Error(`Missing Salesforce configuration: ${missing.join(", ")}`);
+  }
+}
+
 // PKCE helpers
 export function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString("base64url");
@@ -17,6 +31,8 @@ export function generateCodeChallenge(verifier: string): string {
 }
 
 export function getAuthUrl(codeChallenge: string, state?: string): string {
+  requireSalesforceConfig();
+
   const params = new URLSearchParams({
     response_type: "code",
     client_id: clientId(),
@@ -37,6 +53,8 @@ interface TokenResponse {
 }
 
 export async function exchangeCode(code: string, codeVerifier: string): Promise<TokenResponse> {
+  requireSalesforceConfig();
+
   const res = await fetch(SF_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -59,6 +77,8 @@ export async function exchangeCode(code: string, codeVerifier: string): Promise<
 }
 
 export async function refreshToken(refresh_token: string): Promise<{ access_token: string; instance_url: string }> {
+  requireSalesforceConfig();
+
   const res = await fetch(SF_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -82,4 +102,28 @@ export function getOrgId(identityUrl: string): string {
   // Identity URL format: https://login.salesforce.com/id/00Dxx0000001gEH/005xx000001Svhz
   const parts = identityUrl.split("/");
   return parts[parts.length - 2]; // org ID
+}
+
+export async function getOrgInfo(
+  instanceUrl: string,
+  accessToken: string
+): Promise<{ id: string; name: string }> {
+  const res = await fetch(
+    `${instanceUrl}/services/data/v59.0/query?q=${encodeURIComponent(
+      "SELECT Id, Name FROM Organization LIMIT 1"
+    )}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Salesforce org lookup failed: ${error}`);
+  }
+
+  const data = await res.json();
+  const record = data.records?.[0];
+  return {
+    id: String(record?.Id ?? ""),
+    name: String(record?.Name ?? ""),
+  };
 }

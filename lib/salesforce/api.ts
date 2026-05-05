@@ -7,6 +7,26 @@ interface SOQLResult {
   records: Record<string, unknown>[];
 }
 
+export async function getSalesforceInstanceUrl(portalId: string): Promise<string> {
+  const { data: portal, error } = await supabaseAdmin
+    .from("portals")
+    .select("instance_url")
+    .eq("id", portalId)
+    .single();
+
+  if (error || !portal?.instance_url) throw new Error("Salesforce instance URL not found");
+  return portal.instance_url;
+}
+
+export function salesforceRecordUrl(
+  instanceUrl: string,
+  objectApiName: string,
+  id: unknown
+) {
+  if (typeof id !== "string" || !id) return undefined;
+  return `${instanceUrl}/lightning/r/${objectApiName}/${id}/view`;
+}
+
 async function sfQuery(
   instanceUrl: string,
   accessToken: string,

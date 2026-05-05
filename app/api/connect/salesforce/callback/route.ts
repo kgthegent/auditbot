@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setSessionCookies } from "@/lib/auth/session";
-import { exchangeCode, getOrgId } from "@/lib/salesforce/oauth";
+import { exchangeCode, getOrgId, getOrgInfo } from "@/lib/salesforce/oauth";
 import { supabaseAdmin } from "@/lib/supabase/client";
 
 export async function GET(request: NextRequest) {
@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const tokens = await exchangeCode(code, codeVerifier);
-    const orgId = getOrgId(tokens.id);
+    const fallbackOrgId = getOrgId(tokens.id);
+    const orgInfo = await getOrgInfo(tokens.instance_url, tokens.access_token);
+    const orgId = orgInfo.id || fallbackOrgId;
 
     const placeholderEmail = `salesforce-${orgId}@placeholder.local`;
 
@@ -49,7 +51,7 @@ export async function GET(request: NextRequest) {
           access_token: tokens.access_token,
           refresh_token: tokens.refresh_token,
           instance_url: tokens.instance_url,
-          portal_name: "",
+          portal_name: orgInfo.name,
           platform: "salesforce",
         },
         { onConflict: "user_id,hub_id" }
@@ -63,6 +65,13 @@ export async function GET(request: NextRequest) {
       new URL(`/dashboard?hub_id=${orgId}`, request.url)
     );
     setSessionCookies(response, placeholderEmail, orgId);
+    response.cookies.set("sf_code_verifier", "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 0,
+      path: "/",
+      sameSite: "lax",
+    });
     return response;
   } catch (error) {
     console.error("Salesforce OAuth callback error:", error);

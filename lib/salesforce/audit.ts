@@ -1,10 +1,77 @@
-import { CheckResult } from "@/types";
-import { runSOQL } from "./api";
+import { CheckResult, ExampleRecord } from "@/types";
+import { getSalesforceInstanceUrl, runSOQL, salesforceRecordUrl } from "./api";
 
 function toStatus(percentage: number, warnThreshold: number, failThreshold: number) {
   if (percentage >= failThreshold) return "fail" as const;
   if (percentage >= warnThreshold) return "warn" as const;
   return "pass" as const;
+}
+
+function escapeSoqlString(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function recordLabel(record: Record<string, unknown>) {
+  return String(record.Name || record.Subject || record.Email || record.Id || "Salesforce record");
+}
+
+function mapRecordExample(
+  record: Record<string, unknown>,
+  objectApiName: string,
+  instanceUrl: string,
+  detailFields: string[] = []
+): ExampleRecord {
+  return {
+    id: String(record.Id),
+    label: recordLabel(record),
+    detail: detailFields
+      .map((field) => record[field])
+      .filter(Boolean)
+      .map(String)
+      .join(" · "),
+    url: salesforceRecordUrl(instanceUrl, objectApiName, record.Id),
+  };
+}
+
+async function duplicateExamples(
+  portalId: string,
+  objectApiName: "Lead" | "Contact",
+  duplicateEmails: unknown[]
+) {
+  const emails = duplicateEmails
+    .filter((email): email is string => typeof email === "string" && email.length > 0)
+    .slice(0, 5);
+
+  if (emails.length === 0) return [];
+
+  const instanceUrl = await getSalesforceInstanceUrl(portalId);
+  const quotedEmails = emails.map((email) => `'${escapeSoqlString(email)}'`).join(", ");
+  const sampleRes = await runSOQL(
+    portalId,
+    `SELECT Id, Name, Email FROM ${objectApiName} WHERE Email IN (${quotedEmails}) LIMIT 5`
+  );
+
+  return sampleRes.records.map((record) =>
+    mapRecordExample(record, objectApiName, instanceUrl, ["Email"])
+  );
+}
+
+async function sampleRecords(
+  portalId: string,
+  objectApiName: "Lead" | "Contact" | "Opportunity",
+  where: string,
+  fields: string[],
+  detailFields: string[]
+) {
+  const instanceUrl = await getSalesforceInstanceUrl(portalId);
+  const sampleRes = await runSOQL(
+    portalId,
+    `SELECT Id, Name, ${fields.join(", ")} FROM ${objectApiName} WHERE ${where} LIMIT 5`
+  );
+
+  return sampleRes.records.map((record) =>
+    mapRecordExample(record, objectApiName, instanceUrl, detailFields)
+  );
 }
 
 async function checkDuplicateLeads(portalId: string): Promise<CheckResult> {
@@ -17,6 +84,11 @@ async function checkDuplicateLeads(portalId: string): Promise<CheckResult> {
   );
   const count = dupeRes.totalSize;
   const percentage = total > 0 ? (count / total) * 100 : 0;
+  const examples = await duplicateExamples(
+    portalId,
+    "Lead",
+    dupeRes.records.map((record) => record.Email)
+  );
 
   return {
     checkName: "Duplicate Leads",
@@ -30,6 +102,7 @@ async function checkDuplicateLeads(portalId: string): Promise<CheckResult> {
       "Merge duplicate lead records manually or with a dedup tool",
       "Review lead import processes to prevent future duplicates",
     ],
+    exampleRecords: examples,
   };
 }
 
@@ -43,6 +116,11 @@ async function checkDuplicateContacts(portalId: string): Promise<CheckResult> {
   );
   const count = dupeRes.totalSize;
   const percentage = total > 0 ? (count / total) * 100 : 0;
+  const examples = await duplicateExamples(
+    portalId,
+    "Contact",
+    dupeRes.records.map((record) => record.Email)
+  );
 
   return {
     checkName: "Duplicate Contacts",
@@ -56,6 +134,7 @@ async function checkDuplicateContacts(portalId: string): Promise<CheckResult> {
       "Merge duplicate contact records",
       "Set up matching rules to catch duplicates at creation",
     ],
+    exampleRecords: examples,
   };
 }
 
@@ -66,6 +145,13 @@ async function checkMissingLeadOwner(portalId: string): Promise<CheckResult> {
   const res = await runSOQL(portalId, "SELECT COUNT() FROM Lead WHERE OwnerId = null");
   const count = res.totalSize;
   const percentage = total > 0 ? (count / total) * 100 : 0;
+  const examples = await sampleRecords(
+    portalId,
+    "Lead",
+    "OwnerId = null",
+    ["Company", "Email", "CreatedDate"],
+    ["Company", "Email"]
+  );
 
   return {
     checkName: "Missing Lead Owner",
@@ -79,6 +165,7 @@ async function checkMissingLeadOwner(portalId: string): Promise<CheckResult> {
       "Use round-robin assignment for incoming leads",
       "Bulk assign orphaned leads via Data Loader",
     ],
+    exampleRecords: examples,
   };
 }
 
@@ -89,6 +176,13 @@ async function checkMissingLeadSource(portalId: string): Promise<CheckResult> {
   const res = await runSOQL(portalId, "SELECT COUNT() FROM Lead WHERE LeadSource = null");
   const count = res.totalSize;
   const percentage = total > 0 ? (count / total) * 100 : 0;
+  const examples = await sampleRecords(
+    portalId,
+    "Lead",
+    "LeadSource = null",
+    ["Company", "Email", "CreatedDate"],
+    ["Company", "Email"]
+  );
 
   return {
     checkName: "Missing Lead Source",
@@ -102,6 +196,7 @@ async function checkMissingLeadSource(portalId: string): Promise<CheckResult> {
       "Set default lead source values in web-to-lead forms",
       "Backfill lead source for existing records where possible",
     ],
+    exampleRecords: examples,
   };
 }
 
@@ -118,6 +213,13 @@ async function checkStaleLeads(portalId: string): Promise<CheckResult> {
   );
   const count = res.totalSize;
   const percentage = total > 0 ? (count / total) * 100 : 0;
+  const examples = await sampleRecords(
+    portalId,
+    "Lead",
+    "LastActivityDate < LAST_N_DAYS:30 AND IsConverted = false",
+    ["Company", "Email", "LastActivityDate"],
+    ["Company", "LastActivityDate"]
+  );
 
   return {
     checkName: "Stale Leads (30d No Activity)",
@@ -131,6 +233,7 @@ async function checkStaleLeads(portalId: string): Promise<CheckResult> {
       "Set up workflow alerts for leads with no activity in 14 days",
       "Consider archiving or recycling leads with no engagement",
     ],
+    exampleRecords: examples,
   };
 }
 
@@ -147,6 +250,13 @@ async function checkConvertedLeadsWithoutContact(portalId: string): Promise<Chec
   );
   const count = res.totalSize;
   const percentage = total > 0 ? (count / total) * 100 : 0;
+  const examples = await sampleRecords(
+    portalId,
+    "Lead",
+    "IsConverted = true AND ConvertedContactId = null",
+    ["Company", "Email", "ConvertedDate"],
+    ["Company", "ConvertedDate"]
+  );
 
   return {
     checkName: "Converted Leads Without Contact",
@@ -160,6 +270,7 @@ async function checkConvertedLeadsWithoutContact(portalId: string): Promise<Chec
       "Manually create contacts for orphaned converted leads",
       "Check for data integrity issues in lead conversion process",
     ],
+    exampleRecords: examples,
   };
 }
 
@@ -174,6 +285,13 @@ async function checkMissingCampaignAttribution(portalId: string): Promise<CheckR
     );
     const count = res.totalSize;
     const percentage = total > 0 ? (count / total) * 100 : 0;
+    const examples = await sampleRecords(
+      portalId,
+      "Lead",
+      "Campaign__c = null",
+      ["Company", "Email", "CreatedDate"],
+      ["Company", "Email"]
+    );
 
     return {
       checkName: "Missing Campaign Attribution",
@@ -187,6 +305,7 @@ async function checkMissingCampaignAttribution(portalId: string): Promise<CheckR
         "Set up campaign member auto-association rules",
         "Review lead creation flows to include campaign tracking",
       ],
+      exampleRecords: examples,
     };
   } catch {
     // Campaign__c field may not exist — skip gracefully
@@ -215,6 +334,13 @@ async function checkOpenOppsNoActivity(portalId: string): Promise<CheckResult> {
   );
   const count = res.totalSize;
   const percentage = total > 0 ? (count / total) * 100 : 0;
+  const examples = await sampleRecords(
+    portalId,
+    "Opportunity",
+    "LastActivityDate < LAST_N_DAYS:14 AND IsClosed = false",
+    ["Amount", "StageName", "CloseDate", "LastActivityDate"],
+    ["StageName", "CloseDate"]
+  );
 
   return {
     checkName: "Open Opps No Activity (14d)",
@@ -228,6 +354,7 @@ async function checkOpenOppsNoActivity(portalId: string): Promise<CheckResult> {
       "Set up task reminders for opportunities without recent activity",
       "Review pipeline hygiene practices with sales team",
     ],
+    exampleRecords: examples,
   };
 }
 
