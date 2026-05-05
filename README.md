@@ -1,6 +1,6 @@
 # AuditBot
 
-Automated CRM and marketing automation health monitoring by [Village Consulting](https://village-consulting.com).
+Automated HubSpot health monitoring by [Village Consulting](https://village-consulting.com).
 
 ## Tech Stack
 
@@ -8,7 +8,6 @@ Automated CRM and marketing automation health monitoring by [Village Consulting]
 - **Supabase** (Postgres) for database
 - **Tailwind CSS** for styling
 - **HubSpot OAuth 2.0** + API v3
-- **Salesforce OAuth 2.0** + REST/SOQL APIs
 - **Stripe** for payments (wired up, not yet integrated)
 
 ## Getting Started
@@ -47,22 +46,19 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Supported Platforms
+## Public Launch Platform
 
 | Platform | Status | Coverage |
 |----------|--------|----------|
 | HubSpot | Live | Contacts, owners, lifecycle stages, source attribution |
-| Salesforce | Live | Leads, contacts, opportunities, owners, activity, attribution |
-| Marketo Engage | Beta connector | Server-to-server credential validation and lead metadata access |
-| Salesforce Marketing Cloud | Beta connector | Installed Package credential validation and account API metadata access |
-| Account Engagement, Klaviyo, ActiveCampaign | Roadmap | Planned marketing automation health checks |
 
-Platform metadata lives in `lib/platforms.ts` so new systems can share connect UI, platform labels, access-scope copy, and audit catalog data.
-Audit execution is routed through platform adapters in `lib/platform-adapters/`.
+The production launch is HubSpot-only by default. Multi-platform connector work is preserved in the repo and on the `codex/multi-platform-work` branch; set `NEXT_PUBLIC_ENABLE_MULTI_PLATFORM=true` only when those connectors are ready to expose publicly.
+
+Platform metadata lives in `lib/platforms.ts` so future systems can share connect UI, platform labels, access-scope copy, and audit catalog data. Audit execution is routed through platform adapters in `lib/platform-adapters/`.
 
 ### Database migrations
 
-If you already created the Supabase schema before Marketo and Marketing Cloud support, run:
+If you are reviving the preserved multi-platform branch, run:
 
 ```bash
 lib/db/migrations/20260429_platform_credentials.sql

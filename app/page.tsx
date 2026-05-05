@@ -1,5 +1,5 @@
 import ConnectButton from "@/components/ConnectButton";
-import { getAllAuditChecks, PLATFORM_ROADMAP, SUPPORTED_PLATFORMS } from "@/lib/platforms";
+import { getAllAuditChecks, SUPPORTED_PLATFORMS } from "@/lib/platforms";
 
 const severityStyles = {
   HIGH: "border-red-400/25 bg-red-400/10 text-red-200",
@@ -44,7 +44,7 @@ const pricingPlans = [
     note: "per month",
     cta: "Start Free, Upgrade Later",
     highlight: false,
-    features: ["Daily automated audits", "Multi-portal support", "Priority support", "Connector beta access"],
+    features: ["Daily automated audits", "Multi-portal support", "Priority support", "Advanced report sharing"],
   },
   {
     name: "Done For You",
@@ -59,7 +59,6 @@ const pricingPlans = [
 
 export default function Home() {
   const auditChecks = getAllAuditChecks();
-  const supportedPlatformNames = SUPPORTED_PLATFORMS.map((platform) => platform.name).join(", ");
   const failedChecks = auditChecks.filter((check) => check.severity === "HIGH").slice(0, 4);
 
   return (
@@ -99,13 +98,13 @@ export default function Home() {
           <div>
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-cyan-100">
               <span className="h-1.5 w-1.5 rounded-full bg-brand shadow-[0_0_16px_rgba(21,161,199,0.9)]" />
-              AI-assisted CRM health intelligence
+              AI-assisted HubSpot health intelligence
             </div>
             <h1 className="max-w-4xl text-5xl font-semibold leading-[1.02] text-white md:text-7xl">
               Find pipeline risk before it hits revenue.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300">
-              StackAudit connects to your CRM and marketing automation stack, scans for broken records, stalled handoffs, and attribution gaps, then turns the mess into a prioritized fix plan.
+              StackAudit connects to your HubSpot portal, scans for broken records, stalled handoffs, and attribution gaps, then turns the mess into a prioritized fix plan.
             </p>
             <div className="mt-9 flex flex-col gap-4 sm:flex-row sm:items-center">
               <ConnectButton className="justify-center px-7 py-3.5" />
@@ -119,7 +118,7 @@ export default function Home() {
             <div className="mt-9 grid max-w-xl grid-cols-3 gap-4 border-t border-white/10 pt-6">
               {[
                 ["30 sec", "average scan"],
-                ["15+", "health signals"],
+                ["5", "core checks"],
                 ["0", "records modified"],
               ].map(([stat, label]) => (
                 <div key={label}>
@@ -207,11 +206,11 @@ export default function Home() {
           <div className="mx-auto max-w-6xl px-5">
             <div className="grid gap-10 lg:grid-cols-[0.8fr_1fr] lg:items-end">
               <div>
-                <p className="text-sm font-semibold uppercase text-brand">Platform coverage</p>
-                <h2 className="mt-3 text-3xl font-semibold md:text-4xl">One audit model across the systems that touch revenue.</h2>
+                <p className="text-sm font-semibold uppercase text-brand">HubSpot coverage</p>
+                <h2 className="mt-3 text-3xl font-semibold md:text-4xl">A focused audit for the CRM your operators live in.</h2>
               </div>
               <p className="text-base leading-7 text-zinc-400">
-                Current connectors cover {supportedPlatformNames}. The adapter layer is ready for the next wave of marketing automation systems without rebuilding the product surface.
+                The public launch is built around HubSpot read-only OAuth, contact hygiene, owner coverage, lifecycle stages, and attribution signals.
               </p>
             </div>
             <div className="mt-10 grid gap-4 md:grid-cols-4">
@@ -258,11 +257,15 @@ export default function Home() {
             ))}
           </div>
           <div className="mt-8 flex flex-wrap justify-center gap-2">
-            {PLATFORM_ROADMAP.map((platform) => (
-              <span key={platform} className="rounded-full border border-white/10 bg-white/[0.025] px-3 py-1 text-xs text-zinc-500">
-                {platform} next
-              </span>
-            ))}
+            <span className="rounded-full border border-white/10 bg-white/[0.025] px-3 py-1 text-xs text-zinc-500">
+              Read-only HubSpot OAuth
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.025] px-3 py-1 text-xs text-zinc-500">
+              No source-record writes
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.025] px-3 py-1 text-xs text-zinc-500">
+              Fix plan included
+            </span>
           </div>
         </section>
 

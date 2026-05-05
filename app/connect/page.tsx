@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import ConnectButton from "@/components/ConnectButton";
-import { PLATFORM_ROADMAP, SUPPORTED_PLATFORMS } from "@/lib/platforms";
+import { SUPPORTED_PLATFORMS } from "@/lib/platforms";
 
 function ConnectPageInner() {
   const searchParams = useSearchParams();
@@ -22,10 +22,10 @@ function ConnectPageInner() {
       <main className="flex-1 px-6 py-16">
         <div className="mx-auto grid max-w-5xl gap-10 lg:grid-cols-[0.85fr_1fr] lg:items-start">
         <div className="w-full text-center lg:text-left">
-          <h1 className="text-3xl font-bold mb-4">Connect Your CRM</h1>
+          <h1 className="text-3xl font-bold mb-4">Connect Your HubSpot</h1>
           <p className="text-zinc-400 mb-8">
-            We&apos;ll request read-only access to run your CRM health audit.
-            Choose your platform below.
+            We&apos;ll request read-only access to run your HubSpot health audit.
+            StackAudit will not modify your source records.
           </p>
 
           {error && (
@@ -40,7 +40,6 @@ function ConnectPageInner() {
             {SUPPORTED_PLATFORMS.map((platform) => (
               <ConnectButton
                 key={platform.id}
-                platform={platform.id}
                 className="w-full justify-center"
               />
             ))}
@@ -53,7 +52,7 @@ function ConnectPageInner() {
           </p>
           <div className="mt-5 space-y-4">
             {[
-              ["Connect read-only", "Authorize the platform. StackAudit stores tokens securely and does not modify source records."],
+              ["Connect read-only", "Authorize HubSpot. StackAudit stores tokens securely and does not modify source records."],
               ["Run the first scan", "We inspect ownership, lifecycle, duplicate, attribution, and engagement hygiene signals."],
               ["Work the fix plan", "Assign owners, due dates, and notes, then share the executive report."],
             ].map(([title, body], index) => (
@@ -88,17 +87,18 @@ function ConnectPageInner() {
 
           <div className="mt-8 border-t border-zinc-800 pt-6 text-left">
             <p className="text-xs text-zinc-600 uppercase tracking-wider font-semibold mb-3">
-              Next platforms
+              Public launch focus
             </p>
             <div className="flex flex-wrap gap-2">
-              {PLATFORM_ROADMAP.map((platform) => (
-                <span
-                  key={platform}
-                  className="rounded-full border border-zinc-800 px-3 py-1 text-xs text-zinc-500"
-                >
-                  {platform}
-                </span>
-              ))}
+              <span className="rounded-full border border-zinc-800 px-3 py-1 text-xs text-zinc-500">
+                HubSpot only
+              </span>
+              <span className="rounded-full border border-zinc-800 px-3 py-1 text-xs text-zinc-500">
+                Read-only OAuth
+              </span>
+              <span className="rounded-full border border-zinc-800 px-3 py-1 text-xs text-zinc-500">
+                Fix plan + reporting
+              </span>
             </div>
           </div>
         </div>

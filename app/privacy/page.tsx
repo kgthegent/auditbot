@@ -56,7 +56,7 @@ export default function PrivacyPage() {
         <ul>
           <li><strong>Stripe</strong> — payment processing</li>
           <li><strong>Supabase</strong> — database and authentication infrastructure</li>
-          <li><strong>HubSpot and Salesforce</strong> — CRM data access via OAuth (read-only)</li>
+          <li><strong>HubSpot</strong> — CRM data access via OAuth (read-only)</li>
           <li><strong>Vercel</strong> — hosting and deployment infrastructure</li>
         </ul>
         <p>
