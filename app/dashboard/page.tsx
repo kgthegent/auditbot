@@ -65,14 +65,14 @@ function DashboardPageInner() {
       .catch(() => {});
   }, [hubId, emailCaptured]);
 
-  const runAudit = useCallback(async (portalId: string) => {
+  const runAudit = useCallback(async (portalId: string, portalHubId?: string) => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/audit/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ portal_id: portalId }),
+        body: JSON.stringify({ portal_id: portalId, hub_id: portalHubId ?? hubId }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -85,7 +85,7 @@ function DashboardPageInner() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [hubId]);
 
   const handleEmailSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +101,10 @@ function DashboardPageInner() {
       setUserEmail(emailInput);
       setEmailCaptured(true);
       if (hubId) localStorage.setItem(`stackaudit_email_${hubId}`, emailInput);
-      runAudit(portal.id);
+      const data = await res.json();
+      const nextPortal = data.portal?.id ? { ...portal, id: data.portal.id } : portal;
+      setPortal(nextPortal);
+      runAudit(nextPortal.id, nextPortal.hub_id);
     } catch {
       setError("Failed to save email. Please try again.");
     } finally {
@@ -394,7 +397,7 @@ function DashboardPageInner() {
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <button
             onClick={() => {
-              if (portal) runAudit(portal.id);
+              if (portal) runAudit(portal.id, portal.hub_id);
             }}
             disabled={loading}
             className="bg-brand hover:bg-brand-hover disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"

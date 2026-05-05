@@ -61,21 +61,30 @@ export async function POST(request: NextRequest) {
     const authUser = await getAuthUser(request);
     if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { portal_id } = await request.json();
+    const { portal_id, hub_id } = await request.json();
+    const requestedHubId =
+      typeof hub_id === "string" && hub_id.trim()
+        ? hub_id.trim()
+        : request.cookies.get("sa_hub_id")?.value;
 
     if (!portal_id) {
       return NextResponse.json({ error: "portal_id is required" }, { status: 400 });
     }
 
     // Get portal and verify ownership
-    const { data: portal, error: portalError } = await supabaseAdmin
+    const { data: ownedPortal, error: portalError } = await supabaseAdmin
       .from("portals")
       .select("*")
       .eq("id", portal_id)
       .eq("user_id", authUser.id)
       .single();
+    let portal = ownedPortal;
 
     if (portalError || !portal) {
+      portal = await findOwnedPortalFallback(portal_id, authUser.id, requestedHubId);
+    }
+
+    if (!portal) {
       return NextResponse.json({ error: "Portal not found" }, { status: 404 });
     }
 
@@ -175,4 +184,34 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function findOwnedPortalFallback(
+  portalId: string,
+  userId: string,
+  hubId?: string | null
+) {
+  let resolvedHubId = hubId ?? null;
+
+  if (!resolvedHubId) {
+    const { data: stalePortal } = await supabaseAdmin
+      .from("portals")
+      .select("hub_id")
+      .eq("id", portalId)
+      .single();
+    resolvedHubId = stalePortal?.hub_id ?? null;
+  }
+
+  if (!resolvedHubId) return null;
+
+  const { data: portal } = await supabaseAdmin
+    .from("portals")
+    .select("*")
+    .eq("hub_id", resolvedHubId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  return portal ?? null;
 }

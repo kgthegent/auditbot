@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { getPlatformConfig } from "@/lib/platforms";
 import { Platform } from "@/types";
 
@@ -43,10 +44,27 @@ export default function ConnectButton({
   className?: string;
 }) {
   const config = getPlatformConfig(platform);
+  const [href, setHref] = useState(config.connectPath);
+
+  useEffect(() => {
+    let active = true;
+
+    fetch("/api/auth/me")
+      .then((response) => response.json())
+      .then((data: { authenticated?: boolean; hub_id?: string | null }) => {
+        if (!active || !data.authenticated || !data.hub_id) return;
+        setHref(`/dashboard?hub_id=${encodeURIComponent(data.hub_id)}`);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <a
-      href={config.connectPath}
+      href={href}
       className={`inline-flex items-center gap-2 text-white font-semibold px-6 py-3 rounded-lg transition-colors ${className}`}
       style={{ backgroundColor: config.brandColor }}
       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = config.hoverColor)}

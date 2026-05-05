@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     const { data: portal, error: portalLookupError } = await supabaseAdmin
       .from("portals")
-      .select("id, hub_id")
+      .select("id, hub_id, access_token, refresh_token, portal_name")
       .eq("id", portalId)
       .eq("user_id", authUser.id)
       .single();
@@ -64,6 +64,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let linkedPortalId = portal.id;
+
     // Link portal to user
     const { error: portalError } = await supabaseAdmin
       .from("portals")
@@ -72,11 +74,41 @@ export async function POST(req: NextRequest) {
       .eq("user_id", authUser.id);
 
     if (portalError) {
-      console.error("Portal link failed:", portalError);
-      return NextResponse.json(
-        { error: "Failed to link portal" },
-        { status: 500 }
-      );
+      if (portalError.code !== "23505") {
+        console.error("Portal link failed:", portalError);
+        return NextResponse.json(
+          { error: "Failed to link portal" },
+          { status: 500 }
+        );
+      }
+
+      const { data: existingPortal, error: existingPortalError } = await supabaseAdmin
+        .from("portals")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("hub_id", portal.hub_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existingPortalError || !existingPortal) {
+        console.error("Portal conflict lookup failed:", existingPortalError);
+        return NextResponse.json(
+          { error: "Failed to link portal" },
+          { status: 500 }
+        );
+      }
+
+      linkedPortalId = existingPortal.id;
+
+      await supabaseAdmin
+        .from("portals")
+        .update({
+          access_token: portal.access_token,
+          refresh_token: portal.refresh_token,
+          portal_name: portal.portal_name,
+        })
+        .eq("id", existingPortal.id);
     }
 
     // Trigger email drip sequence
@@ -86,19 +118,22 @@ export async function POST(req: NextRequest) {
       const { data: audit } = await supabaseAdmin
         .from("audits")
         .select("score")
-        .eq("portal_id", portalId)
+        .eq("portal_id", linkedPortalId)
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
 
       const auditScore = audit?.score ?? 0;
 
-      triggerSequence(email, portalId, portal.hub_id, auditScore).catch(
+      triggerSequence(email, linkedPortalId, portal.hub_id, auditScore).catch(
         (err) => console.error("Email sequence trigger failed:", err)
       );
     }
 
-    const response = NextResponse.json({ success: true });
+    const response = NextResponse.json({
+      success: true,
+      portal: { id: linkedPortalId, hub_id: portal.hub_id },
+    });
     setSessionCookies(response, email, portal.hub_id);
     return response;
   } catch {
