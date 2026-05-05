@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { data: portal, error } = await supabaseAdmin
+  let { data: portal, error } = await supabaseAdmin
     .from("portals")
     .select("id, hub_id, portal_name, platform, user_id, users(plan)")
     .eq("hub_id", hubId)
@@ -35,6 +35,20 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(1)
     .single();
+
+  if (error?.message?.includes("platform")) {
+    const fallback = await supabaseAdmin
+      .from("portals")
+      .select("id, hub_id, portal_name, user_id, users(plan)")
+      .eq("hub_id", hubId)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    portal = fallback.data ? { ...fallback.data, platform: "hubspot" } : null;
+    error = fallback.error;
+  }
 
   if (error || !portal) {
     return NextResponse.json(

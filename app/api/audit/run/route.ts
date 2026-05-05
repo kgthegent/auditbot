@@ -81,11 +81,21 @@ export async function POST(request: NextRequest) {
 
     // Create audit record
     const reportToken = createReportToken();
-    const { data: audit, error: auditError } = await supabaseAdmin
+    let { data: audit, error: auditError } = await supabaseAdmin
       .from("audits")
       .insert({ portal_id, score: 0, report_token: reportToken })
       .select()
       .single();
+
+    if (auditError?.message?.includes("report_token")) {
+      const fallback = await supabaseAdmin
+        .from("audits")
+        .insert({ portal_id, score: 0 })
+        .select()
+        .single();
+      audit = fallback.data ? { ...fallback.data, report_token: null } : null;
+      auditError = fallback.error;
+    }
 
     if (auditError || !audit) {
       return NextResponse.json({ error: "Failed to create audit" }, { status: 500 });
@@ -108,10 +118,39 @@ export async function POST(request: NextRequest) {
       example_records: check.exampleRecords ?? [],
     }));
 
-    const { data: savedChecks, error: checksError } = await supabaseAdmin
+    let { data: savedChecks, error: checksError } = await supabaseAdmin
       .from("audit_checks")
       .insert(checkRows)
       .select("id, check_name, severity, count, percentage, status, description, fix_steps, example_records, workflow_status, assigned_to, due_at, notes, resolved_at");
+
+    if (checksError?.message?.includes("example_records") || checksError?.message?.includes("workflow_status")) {
+      const fallbackRows = checks.map((check) => ({
+        audit_id: audit.id,
+        check_name: check.checkName,
+        severity: check.severity,
+        count: check.count,
+        percentage: check.percentage,
+        status: check.status,
+        description: check.description,
+        fix_steps: check.fixSteps,
+      }));
+
+      const fallback = await supabaseAdmin
+        .from("audit_checks")
+        .insert(fallbackRows)
+        .select("id, check_name, severity, count, percentage, status, description, fix_steps");
+
+      savedChecks = fallback.data?.map((row) => ({
+        ...row,
+        example_records: [],
+        workflow_status: "open",
+        assigned_to: null,
+        due_at: null,
+        notes: "",
+        resolved_at: null,
+      })) ?? null;
+      checksError = fallback.error;
+    }
 
     if (checksError || !savedChecks) {
       return NextResponse.json({ error: "Failed to save audit checks" }, { status: 500 });
