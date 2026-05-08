@@ -2,16 +2,16 @@ import ConnectButton from "@/components/ConnectButton";
 import { getAllAuditChecks, SUPPORTED_PLATFORMS } from "@/lib/platforms";
 
 const severityStyles = {
-  HIGH: "border-red-400/25 bg-red-400/10 text-red-200",
-  MEDIUM: "border-amber-300/25 bg-amber-300/10 text-amber-100",
-  LOW: "border-sky-300/25 bg-sky-300/10 text-sky-100",
+  HIGH: "bg-red-300",
+  MEDIUM: "bg-amber-300",
+  LOW: "bg-sky-300",
 };
 
 const categoryStyles = {
-  "Data Quality": "bg-cyan-300/10 text-cyan-100",
-  Ownership: "bg-emerald-300/10 text-emerald-100",
-  Attribution: "bg-amber-300/10 text-amber-100",
-  Engagement: "bg-fuchsia-300/10 text-fuchsia-100",
+  "Data Quality": "Data quality",
+  Ownership: "Ownership",
+  Attribution: "Attribution",
+  Engagement: "Engagement",
 };
 
 const platformInitials: Record<string, string> = {
@@ -171,7 +171,13 @@ export default function Home() {
                       <div key={check.name} className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
                         <div className="mb-3 flex items-center justify-between gap-3">
                           <span className="text-sm font-semibold text-white">{check.name}</span>
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${severityStyles[check.severity]}`}>
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                            check.severity === "HIGH"
+                              ? "border-red-400/25 bg-red-400/10 text-red-200"
+                              : check.severity === "MEDIUM"
+                                ? "border-amber-300/25 bg-amber-300/10 text-amber-100"
+                                : "border-sky-300/25 bg-sky-300/10 text-sky-100"
+                          }`}>
                             {check.severity}
                           </span>
                         </div>
@@ -243,15 +249,15 @@ export default function Home() {
               StackAudit groups issues by severity and operating category so your team knows what to fix first.
             </p>
           </div>
-          <div className="mt-12 grid gap-3 md:grid-cols-2">
+          <div className="mx-auto mt-12 max-w-3xl rounded-2xl border border-white/10 bg-white/[0.025] p-2">
             {auditChecks.map((check) => (
-              <div key={check.name} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-4">
-                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${severityStyles[check.severity]}`}>
-                  {check.severity}
-                </span>
-                <span className="min-w-0 flex-1 text-sm font-medium text-zinc-100">{check.name}</span>
-                <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${categoryStyles[check.category]}`}>
-                  {check.category}
+              <div key={check.name} className="flex items-center justify-between gap-4 rounded-xl px-4 py-3 text-left transition-colors hover:bg-white/[0.035]">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${severityStyles[check.severity]}`} />
+                  <span className="min-w-0 truncate text-sm font-medium text-zinc-100">{check.name}</span>
+                </div>
+                <span className="shrink-0 text-xs text-zinc-500">
+                  {categoryStyles[check.category]}
                 </span>
               </div>
             ))}

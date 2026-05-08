@@ -550,26 +550,37 @@ function DashboardPageInner() {
 
             {/* Plan Banner */}
             {portal?.plan === "free" && (
-              <div className="mt-6 bg-brand/10 border border-brand/30 rounded-xl p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-brand font-semibold text-sm mb-1">You&apos;re on the free plan</p>
-                    <p className="text-zinc-400 text-sm">Upgrade to get weekly monitoring, email digests, and full audit history — automatically.</p>
+              <div className="relative mt-6 overflow-hidden rounded-2xl border border-brand/45 bg-gradient-to-br from-brand/20 via-brand/10 to-zinc-900 p-6 shadow-2xl shadow-cyan-950/30">
+                <div className="pointer-events-none absolute right-0 top-0 h-28 w-28 rounded-full bg-brand/20 blur-3xl" />
+                <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                  <div className="max-w-2xl">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Keep this score moving</p>
+                    <h2 className="mt-2 text-2xl font-bold text-white">Turn this audit into weekly monitoring.</h2>
+                    <p className="mt-2 text-sm leading-6 text-zinc-300">
+                      Upgrade for automated re-scans, email digests, and full audit history so new issues do not quietly pile up.
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-300">
+                      {["Weekly checks", "Email digest", "90-day history"].map((feature) => (
+                        <span key={feature} className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                          {feature}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="flex gap-3 mt-4">
-                  <button
-                    onClick={() => handleCheckout("starter")}
-                    className="bg-brand hover:bg-brand-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-                  >
-                    Starter — $49/mo
-                  </button>
-                  <button
-                    onClick={() => handleCheckout("pro")}
-                    className="bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-                  >
-                    Pro — $99/mo
-                  </button>
+                  <div className="flex shrink-0 flex-col gap-2 sm:flex-row md:flex-col">
+                    <button
+                      onClick={() => handleCheckout("starter")}
+                      className="rounded-lg bg-brand px-5 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-950/40 transition-colors hover:bg-brand-hover"
+                    >
+                      Start Starter, $49/mo
+                    </button>
+                    <button
+                      onClick={() => handleCheckout("pro")}
+                      className="rounded-lg border border-white/10 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/[0.1]"
+                    >
+                      Go Pro, $99/mo
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
