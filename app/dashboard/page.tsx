@@ -99,16 +99,16 @@ function DashboardPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: emailInput, portal_id: portal.id }),
       });
-      if (!res.ok) throw new Error("Failed to save email");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save email");
       setUserEmail(emailInput);
       setEmailCaptured(true);
       if (hubId) localStorage.setItem(`stackaudit_email_${hubId}`, emailInput);
-      const data = await res.json();
       const nextPortal = data.portal?.id ? { ...portal, id: data.portal.id } : portal;
       setPortal(nextPortal);
       runAudit(nextPortal.id, nextPortal.hub_id);
-    } catch {
-      setError("Failed to save email. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? `${err.message}. Please try again.` : "Failed to save email. Please try again.");
     } finally {
       setEmailSubmitting(false);
     }

@@ -66,42 +66,19 @@ export async function POST(req: NextRequest) {
 
     let linkedPortalId = portal.id;
 
-    // Link portal to user
-    const { error: portalError } = await supabaseAdmin
+    const { data: existingPortal } = await supabaseAdmin
       .from("portals")
-      .update({ user_id: user.id })
-      .eq("id", portalId)
-      .eq("user_id", authUser.id);
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("hub_id", portal.hub_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (portalError) {
-      if (portalError.code !== "23505") {
-        console.error("Portal link failed:", portalError);
-        return NextResponse.json(
-          { error: "Failed to link portal" },
-          { status: 500 }
-        );
-      }
-
-      const { data: existingPortal, error: existingPortalError } = await supabaseAdmin
-        .from("portals")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("hub_id", portal.hub_id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (existingPortalError || !existingPortal) {
-        console.error("Portal conflict lookup failed:", existingPortalError);
-        return NextResponse.json(
-          { error: "Failed to link portal" },
-          { status: 500 }
-        );
-      }
-
+    if (existingPortal && existingPortal.id !== portal.id) {
       linkedPortalId = existingPortal.id;
 
-      await supabaseAdmin
+      const { error: refreshError } = await supabaseAdmin
         .from("portals")
         .update({
           access_token: portal.access_token,
@@ -109,6 +86,67 @@ export async function POST(req: NextRequest) {
           portal_name: portal.portal_name,
         })
         .eq("id", existingPortal.id);
+
+      if (refreshError) {
+        console.error("Existing portal refresh failed:", refreshError);
+        return NextResponse.json(
+          { error: "Failed to refresh portal connection" },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Link portal to user
+      const { error: portalError } = await supabaseAdmin
+        .from("portals")
+        .update({ user_id: user.id })
+        .eq("id", portalId)
+        .eq("user_id", authUser.id);
+
+      if (portalError) {
+        if (portalError.code !== "23505") {
+          console.error("Portal link failed:", portalError);
+          return NextResponse.json(
+            { error: "Failed to link portal" },
+            { status: 500 }
+          );
+        }
+
+        const { data: conflictPortal, error: conflictPortalError } = await supabaseAdmin
+          .from("portals")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("hub_id", portal.hub_id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (conflictPortalError || !conflictPortal) {
+          console.error("Portal conflict lookup failed:", conflictPortalError);
+          return NextResponse.json(
+            { error: "Failed to link portal" },
+            { status: 500 }
+          );
+        }
+
+        linkedPortalId = conflictPortal.id;
+
+        const { error: refreshError } = await supabaseAdmin
+          .from("portals")
+          .update({
+            access_token: portal.access_token,
+            refresh_token: portal.refresh_token,
+            portal_name: portal.portal_name,
+          })
+          .eq("id", conflictPortal.id);
+
+        if (refreshError) {
+          console.error("Conflicting portal refresh failed:", refreshError);
+          return NextResponse.json(
+            { error: "Failed to refresh portal connection" },
+            { status: 500 }
+          );
+        }
+      }
     }
 
     // Trigger email drip sequence
