@@ -1,3 +1,4 @@
+import { readSession } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe/client";
 import { supabaseAdmin } from "@/lib/supabase/client";
@@ -6,17 +7,14 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const { email } = await req.json();
-
-    if (!email) {
-      return NextResponse.json({ error: "Email required" }, { status: 400 });
-    }
+    const identity = readSession(req);
+    if (!identity) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     // Look up the Stripe customer ID from our users table
     const { data: user, error } = await supabaseAdmin
       .from("users")
       .select("stripe_customer_id")
-      .eq("email", email)
+      .eq("id", identity.userId)
       .single();
 
     if (error || !user?.stripe_customer_id) {

@@ -1,4 +1,5 @@
 import { CheckResult, ExampleRecord } from "@/types";
+import { runChecks } from "@/lib/audit/completeness";
 import { getSalesforceInstanceUrl, runSOQL, salesforceRecordUrl } from "./api";
 
 function toStatus(percentage: number, warnThreshold: number, failThreshold: number) {
@@ -7,8 +8,41 @@ function toStatus(percentage: number, warnThreshold: number, failThreshold: numb
   return "pass" as const;
 }
 
+function affectedPercentage(count: number, total: number) {
+  // Counts are queried separately. If permissions, concurrent changes, or a
+  // malformed provider response make them inconsistent, do not score them.
+  if (
+    !Number.isSafeInteger(count) ||
+    !Number.isSafeInteger(total) ||
+    count < 0 ||
+    total < 0 ||
+    count > total
+  ) {
+    throw new Error("Salesforce affected count is inconsistent with the audited population");
+  }
+  return total > 0 ? (count / total) * 100 : 0;
+}
+
 function escapeSoqlString(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function duplicateRecordCount(records: Record<string, unknown>[], total: number) {
+  const count = records.reduce((sum, record) => {
+    if (
+      typeof record.Email !== "string" ||
+      !record.Email.trim() ||
+      !Number.isSafeInteger(record.total) ||
+      (record.total as number) < 2
+    ) {
+      throw new Error("Invalid Salesforce duplicate-email aggregate");
+    }
+    return sum + (record.total as number);
+  }, 0);
+  if (!Number.isSafeInteger(count) || count > total) {
+    throw new Error("Salesforce duplicate counts exceed the record population");
+  }
+  return count;
 }
 
 function recordLabel(record: Record<string, unknown>) {
@@ -80,10 +114,10 @@ async function checkDuplicateLeads(portalId: string): Promise<CheckResult> {
 
   const dupeRes = await runSOQL(
     portalId,
-    "SELECT Email, COUNT(Id) total FROM Lead GROUP BY Email HAVING COUNT(Id) > 1"
+    "SELECT Email, COUNT(Id) total FROM Lead WHERE Email != null GROUP BY Email HAVING COUNT(Id) > 1"
   );
-  const count = dupeRes.totalSize;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const count = duplicateRecordCount(dupeRes.records, total);
+  const percentage = affectedPercentage(count, total);
   const examples = await duplicateExamples(
     portalId,
     "Lead",
@@ -96,7 +130,7 @@ async function checkDuplicateLeads(portalId: string): Promise<CheckResult> {
     count,
     percentage: Math.round(percentage * 100) / 100,
     status: toStatus(percentage, 2, 5),
-    description: `Found ${count} duplicate lead email addresses across ${total} leads.`,
+    description: `${count} of ${total} leads share an email address with another lead, across ${dupeRes.records.length} duplicate email groups. Leads without an email are excluded from duplicate groups.`,
     fixSteps: [
       "Use Salesforce duplicate rules to prevent new duplicates",
       "Merge duplicate lead records manually or with a dedup tool",
@@ -112,10 +146,10 @@ async function checkDuplicateContacts(portalId: string): Promise<CheckResult> {
 
   const dupeRes = await runSOQL(
     portalId,
-    "SELECT Email, COUNT(Id) total FROM Contact GROUP BY Email HAVING COUNT(Id) > 1"
+    "SELECT Email, COUNT(Id) total FROM Contact WHERE Email != null GROUP BY Email HAVING COUNT(Id) > 1"
   );
-  const count = dupeRes.totalSize;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const count = duplicateRecordCount(dupeRes.records, total);
+  const percentage = affectedPercentage(count, total);
   const examples = await duplicateExamples(
     portalId,
     "Contact",
@@ -128,7 +162,7 @@ async function checkDuplicateContacts(portalId: string): Promise<CheckResult> {
     count,
     percentage: Math.round(percentage * 100) / 100,
     status: toStatus(percentage, 2, 5),
-    description: `Found ${count} duplicate contact email addresses across ${total} contacts.`,
+    description: `${count} of ${total} contacts share an email address with another contact, across ${dupeRes.records.length} duplicate email groups. Contacts without an email are excluded from duplicate groups.`,
     fixSteps: [
       "Enable Salesforce duplicate management rules",
       "Merge duplicate contact records",
@@ -144,7 +178,7 @@ async function checkMissingLeadOwner(portalId: string): Promise<CheckResult> {
 
   const res = await runSOQL(portalId, "SELECT COUNT() FROM Lead WHERE OwnerId = null");
   const count = res.totalSize;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const percentage = affectedPercentage(count, total);
   const examples = await sampleRecords(
     portalId,
     "Lead",
@@ -175,7 +209,7 @@ async function checkMissingLeadSource(portalId: string): Promise<CheckResult> {
 
   const res = await runSOQL(portalId, "SELECT COUNT() FROM Lead WHERE LeadSource = null");
   const count = res.totalSize;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const percentage = affectedPercentage(count, total);
   const examples = await sampleRecords(
     portalId,
     "Lead",
@@ -201,6 +235,7 @@ async function checkMissingLeadSource(portalId: string): Promise<CheckResult> {
 }
 
 async function checkStaleLeads(portalId: string): Promise<CheckResult> {
+  const where = "IsConverted = false AND (LastActivityDate < LAST_N_DAYS:30 OR (LastActivityDate = null AND CreatedDate < LAST_N_DAYS:30))";
   const totalRes = await runSOQL(
     portalId,
     "SELECT COUNT() FROM Lead WHERE IsConverted = false"
@@ -209,14 +244,14 @@ async function checkStaleLeads(portalId: string): Promise<CheckResult> {
 
   const res = await runSOQL(
     portalId,
-    "SELECT COUNT() FROM Lead WHERE LastActivityDate < LAST_N_DAYS:30 AND IsConverted = false"
+    `SELECT COUNT() FROM Lead WHERE ${where}`
   );
   const count = res.totalSize;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const percentage = affectedPercentage(count, total);
   const examples = await sampleRecords(
     portalId,
     "Lead",
-    "LastActivityDate < LAST_N_DAYS:30 AND IsConverted = false",
+    where,
     ["Company", "Email", "LastActivityDate"],
     ["Company", "LastActivityDate"]
   );
@@ -227,7 +262,7 @@ async function checkStaleLeads(portalId: string): Promise<CheckResult> {
     count,
     percentage: Math.round(percentage * 100) / 100,
     status: toStatus(percentage, 20, 40),
-    description: `${count} of ${total} open leads have had no activity in 30+ days.`,
+    description: `${count} of ${total} open leads have had no activity in 30+ days, including leads created more than 30 days ago with no recorded activity.`,
     fixSteps: [
       "Create a report of stale leads and assign follow-up tasks",
       "Set up workflow alerts for leads with no activity in 14 days",
@@ -249,7 +284,7 @@ async function checkConvertedLeadsWithoutContact(portalId: string): Promise<Chec
     "SELECT COUNT() FROM Lead WHERE IsConverted = true AND ConvertedContactId = null"
   );
   const count = res.totalSize;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const percentage = affectedPercentage(count, total);
   const examples = await sampleRecords(
     portalId,
     "Lead",
@@ -275,53 +310,40 @@ async function checkConvertedLeadsWithoutContact(portalId: string): Promise<Chec
 }
 
 async function checkMissingCampaignAttribution(portalId: string): Promise<CheckResult> {
-  try {
-    const totalRes = await runSOQL(portalId, "SELECT COUNT() FROM Lead");
-    const total = totalRes.totalSize;
+  // CampaignMember is the standard Salesforce relationship. Campaign__c is an
+  // optional custom field and cannot be assumed to exist in every organization.
+  const where = "Id NOT IN (SELECT LeadId FROM CampaignMember WHERE LeadId != null)";
+  const totalRes = await runSOQL(portalId, "SELECT COUNT() FROM Lead");
+  const total = totalRes.totalSize;
+  const res = await runSOQL(portalId, `SELECT COUNT() FROM Lead WHERE ${where}`);
+  const count = res.totalSize;
+  const percentage = affectedPercentage(count, total);
+  const examples = await sampleRecords(
+    portalId,
+    "Lead",
+    where,
+    ["Company", "Email", "CreatedDate"],
+    ["Company", "Email"]
+  );
 
-    const res = await runSOQL(
-      portalId,
-      "SELECT COUNT() FROM Lead WHERE Campaign__c = null"
-    );
-    const count = res.totalSize;
-    const percentage = total > 0 ? (count / total) * 100 : 0;
-    const examples = await sampleRecords(
-      portalId,
-      "Lead",
-      "Campaign__c = null",
-      ["Company", "Email", "CreatedDate"],
-      ["Company", "Email"]
-    );
-
-    return {
-      checkName: "Missing Campaign Attribution",
-      severity: "low",
-      count,
-      percentage: Math.round(percentage * 100) / 100,
-      status: toStatus(percentage, 30, 50),
-      description: `${count} of ${total} leads have no campaign attribution.`,
-      fixSteps: [
-        "Add Campaign__c field to lead page layouts if missing",
-        "Set up campaign member auto-association rules",
-        "Review lead creation flows to include campaign tracking",
-      ],
-      exampleRecords: examples,
-    };
-  } catch {
-    // Campaign__c field may not exist — skip gracefully
-    return {
-      checkName: "Missing Campaign Attribution",
-      severity: "low",
-      count: 0,
-      percentage: 0,
-      status: "pass",
-      description: "Campaign__c field not found — skipped. Add a custom Campaign field to enable this check.",
-      fixSteps: [],
-    };
-  }
+  return {
+    checkName: "Missing Campaign Attribution",
+    severity: "low",
+    count,
+    percentage: Math.round(percentage * 100) / 100,
+    status: toStatus(percentage, 30, 50),
+    description: `${count} of ${total} leads have no campaign membership. This checks standard CampaignMember records, not custom attribution fields.`,
+    fixSteps: [
+      "Add relevant leads to their Salesforce campaigns",
+      "Set up campaign member auto-association rules",
+      "Review lead creation flows to include campaign tracking",
+    ],
+    exampleRecords: examples,
+  };
 }
 
 async function checkOpenOppsNoActivity(portalId: string): Promise<CheckResult> {
+  const where = "IsClosed = false AND (LastActivityDate < LAST_N_DAYS:14 OR (LastActivityDate = null AND CreatedDate < LAST_N_DAYS:14))";
   const totalRes = await runSOQL(
     portalId,
     "SELECT COUNT() FROM Opportunity WHERE IsClosed = false"
@@ -330,14 +352,14 @@ async function checkOpenOppsNoActivity(portalId: string): Promise<CheckResult> {
 
   const res = await runSOQL(
     portalId,
-    "SELECT COUNT() FROM Opportunity WHERE LastActivityDate < LAST_N_DAYS:14 AND IsClosed = false"
+    `SELECT COUNT() FROM Opportunity WHERE ${where}`
   );
   const count = res.totalSize;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const percentage = affectedPercentage(count, total);
   const examples = await sampleRecords(
     portalId,
     "Opportunity",
-    "LastActivityDate < LAST_N_DAYS:14 AND IsClosed = false",
+    where,
     ["Amount", "StageName", "CloseDate", "LastActivityDate"],
     ["StageName", "CloseDate"]
   );
@@ -348,7 +370,7 @@ async function checkOpenOppsNoActivity(portalId: string): Promise<CheckResult> {
     count,
     percentage: Math.round(percentage * 100) / 100,
     status: toStatus(percentage, 20, 40),
-    description: `${count} of ${total} open opportunities have had no activity in 14+ days.`,
+    description: `${count} of ${total} open opportunities have had no activity in 14+ days, including opportunities created more than 14 days ago with no recorded activity.`,
     fixSteps: [
       "Create dashboards to highlight stale opportunities",
       "Set up task reminders for opportunities without recent activity",
@@ -381,7 +403,7 @@ async function checkLeadContactCrossDupes(portalId: string): Promise<CheckResult
   });
 
   const total = leadEmails.size;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const percentage = affectedPercentage(count, total);
 
   return {
     checkName: "Lead/Contact Cross-Dupes",
@@ -389,7 +411,7 @@ async function checkLeadContactCrossDupes(portalId: string): Promise<CheckResult
     count,
     percentage: Math.round(percentage * 100) / 100,
     status: toStatus(percentage, 5, 15),
-    description: `${count} lead emails also exist as contacts — potential duplicates across objects.`,
+    description: `${count} of ${total} distinct non-empty lead email addresses also exist on contacts; these are potential duplicates across objects.`,
     fixSteps: [
       "Convert matching leads to contacts where appropriate",
       "Set up duplicate rules spanning Lead and Contact objects",
@@ -399,19 +421,15 @@ async function checkLeadContactCrossDupes(portalId: string): Promise<CheckResult
 }
 
 export async function runAllChecks(portalId: string): Promise<CheckResult[]> {
-  const results = await Promise.allSettled([
-    checkDuplicateLeads(portalId),
-    checkDuplicateContacts(portalId),
-    checkMissingLeadOwner(portalId),
-    checkMissingLeadSource(portalId),
-    checkStaleLeads(portalId),
-    checkConvertedLeadsWithoutContact(portalId),
-    checkMissingCampaignAttribution(portalId),
-    checkOpenOppsNoActivity(portalId),
-    checkLeadContactCrossDupes(portalId),
+  return runChecks([
+    { name: "Duplicate Leads", run: () => checkDuplicateLeads(portalId) },
+    { name: "Duplicate Contacts", run: () => checkDuplicateContacts(portalId) },
+    { name: "Missing Lead Owner", run: () => checkMissingLeadOwner(portalId) },
+    { name: "Missing Lead Source", run: () => checkMissingLeadSource(portalId) },
+    { name: "Stale Leads (30d No Activity)", run: () => checkStaleLeads(portalId) },
+    { name: "Converted Leads Without Contact", run: () => checkConvertedLeadsWithoutContact(portalId) },
+    { name: "Missing Campaign Attribution", run: () => checkMissingCampaignAttribution(portalId) },
+    { name: "Open Opps No Activity (14d)", run: () => checkOpenOppsNoActivity(portalId) },
+    { name: "Lead/Contact Cross-Dupes", run: () => checkLeadContactCrossDupes(portalId) },
   ]);
-
-  return results
-    .filter((r): r is PromiseFulfilledResult<CheckResult> => r.status === "fulfilled")
-    .map((r) => r.value);
 }

@@ -1,9 +1,14 @@
+import { getConnectionUser } from "@/lib/auth/connection-user";
+import { hasValidOAuthState, setOAuthState } from "@/lib/auth/oauth-state";
 import { NextRequest, NextResponse } from "next/server";
-import { setSessionCookies } from "@/lib/auth/session";
+import { assertSessionConfigured, setSessionCookies } from "@/lib/auth/session";
 import { exchangeCode, getOrgId, getOrgInfo } from "@/lib/salesforce/oauth";
 import { supabaseAdmin } from "@/lib/supabase/client";
 
 export async function GET(request: NextRequest) {
+  if (!hasValidOAuthState(request, "salesforce_oauth_state")) {
+    return NextResponse.redirect(new URL("/connect?error=invalid_state", request.url));
+  }
   const code = request.nextUrl.searchParams.get("code");
   const salesforceError = request.nextUrl.searchParams.get("error");
   const salesforceErrorDescription = request.nextUrl.searchParams.get("error_description");
@@ -32,6 +37,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    assertSessionConfigured();
     const tokens = await exchangeCode(code, codeVerifier);
     const fallbackOrgId = getOrgId(tokens.id);
     const orgInfo = await getOrgInfo(tokens.instance_url, tokens.access_token);
@@ -39,19 +45,7 @@ export async function GET(request: NextRequest) {
 
     const placeholderEmail = `salesforce-${orgId}@placeholder.local`;
 
-    // Upsert user (placeholder email until we capture real one)
-    const { data: user, error: userError } = await supabaseAdmin
-      .from("users")
-      .upsert(
-        { email: placeholderEmail },
-        { onConflict: "email" }
-      )
-      .select()
-      .single();
-
-    if (userError || !user) {
-      throw new Error(`Failed to upsert user: ${userError?.message}`);
-    }
+    const user = await getConnectionUser(request, placeholderEmail);
 
     // Upsert portal
     const { error: portalError } = await supabaseAdmin
@@ -76,7 +70,8 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.redirect(
       new URL(`/dashboard?hub_id=${orgId}`, request.url)
     );
-    setSessionCookies(response, placeholderEmail, orgId);
+    setSessionCookies(response, { userId: user.id, email: user.email, hubId: orgId });
+    setOAuthState(response, "salesforce_oauth_state", "");
     response.cookies.set("sf_code_verifier", "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

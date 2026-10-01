@@ -1,3 +1,4 @@
+import { readSession } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/client";
 import { CheckResult, ExampleRecord, Platform } from "@/types";
@@ -5,13 +6,13 @@ import { CheckResult, ExampleRecord, Platform } from "@/types";
 export const dynamic = "force-dynamic";
 
 async function getAuthUser(req: NextRequest) {
-  const email = req.cookies.get("sa_email")?.value;
-  if (!email) return null;
+  const session = readSession(req);
+  if (!session) return null;
 
   const { data: user } = await supabaseAdmin
     .from("users")
     .select("id")
-    .eq("email", email)
+    .eq("id", session.userId)
     .single();
 
   return user ?? null;
@@ -75,7 +76,7 @@ export async function GET(
     auditError = fallback.error;
   }
 
-  if (auditError || !audit) {
+  if (auditError || !audit || !audit.completed_at) {
     return NextResponse.json({ error: "Report not found" }, { status: 404 });
   }
 

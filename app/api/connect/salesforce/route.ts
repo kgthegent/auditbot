@@ -1,3 +1,5 @@
+import { assertSessionConfigured } from "@/lib/auth/session";
+import { createOAuthState, setOAuthState } from "@/lib/auth/oauth-state";
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUrl, generateCodeVerifier, generateCodeChallenge } from "@/lib/salesforce/oauth";
 import { supabaseAdmin } from "@/lib/supabase/client";
@@ -15,6 +17,7 @@ async function hasSalesforcePortalSchema() {
 
 export async function GET(request: NextRequest) {
   try {
+    assertSessionConfigured();
     if (!(await hasSalesforcePortalSchema())) {
       return NextResponse.redirect(
         new URL("/connect/salesforce?error=db_not_ready", request.url)
@@ -23,9 +26,11 @@ export async function GET(request: NextRequest) {
 
     const verifier = generateCodeVerifier();
     const challenge = generateCodeChallenge(verifier);
-    const url = getAuthUrl(challenge);
+    const state = createOAuthState();
+    const url = getAuthUrl(challenge, state);
 
     const response = NextResponse.redirect(url);
+    setOAuthState(response, "salesforce_oauth_state", state);
     response.cookies.set("sf_code_verifier", verifier, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

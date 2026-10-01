@@ -38,37 +38,27 @@ function DashboardPageInner() {
   const [workflowSaving, setWorkflowSaving] = useState<string | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
 
-  const [emailCaptured, setEmailCaptured] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const params = new URLSearchParams(window.location.search);
-    const hid = params.get("hub_id");
-    return hid ? !!localStorage.getItem(`stackaudit_email_${hid}`) : false;
-  });
-  const [userEmail, setUserEmail] = useState(() => {
-    if (typeof window === "undefined") return "";
-    const params = new URLSearchParams(window.location.search);
-    const hid = params.get("hub_id");
-    return hid ? localStorage.getItem(`stackaudit_email_${hid}`) || "" : "";
-  });
+  const [emailCaptured, setEmailCaptured] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [emailSubmitting, setEmailSubmitting] = useState(false);
+  const [emailVerificationSent, setEmailVerificationSent] = useState(searchParams.get("verification") === "sent");
 
-  // Check magic link cookie on mount — skip email form if already authenticated
+  // Only the server's verified session determines identity, never localStorage.
   useEffect(() => {
     fetch("/api/auth/me")
       .then(r => r.json())
       .then((data: { authenticated: boolean; email?: string }) => {
-        if (data.authenticated && data.email && !isPlaceholderEmail(data.email) && !emailCaptured) {
-          setUserEmail(data.email);
-          setEmailCaptured(true);
-          if (hubId) localStorage.setItem(`stackaudit_email_${hubId}`, data.email);
-        }
+        const verified = !!(data.authenticated && data.email && !isPlaceholderEmail(data.email));
+        setEmailCaptured(verified);
+        setUserEmail(verified ? data.email! : "");
       })
-      .catch(() => {});
-  }, [hubId, emailCaptured]);
+      .catch(() => { setEmailCaptured(false); setUserEmail(""); });
+  }, [hubId]);
 
   const runAudit = useCallback(async (portalId: string, portalHubId?: string) => {
     setLoading(true);
+    setAudit(null);
     setError(null);
     try {
       const res = await fetch("/api/audit/run", {
@@ -101,9 +91,12 @@ function DashboardPageInner() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save email");
+      if (data.verification_required) {
+        setEmailVerificationSent(true);
+        return;
+      }
       setUserEmail(emailInput);
       setEmailCaptured(true);
-      if (hubId) localStorage.setItem(`stackaudit_email_${hubId}`, emailInput);
       const nextPortal = data.portal?.id ? { ...portal, id: data.portal.id } : portal;
       setPortal(nextPortal);
       runAudit(nextPortal.id, nextPortal.hub_id);
@@ -112,7 +105,7 @@ function DashboardPageInner() {
     } finally {
       setEmailSubmitting(false);
     }
-  }, [emailInput, hubId, portal, runAudit]);
+  }, [emailInput, portal, runAudit]);
 
   const updateCheckWorkflow = useCallback(
     async (
@@ -230,6 +223,7 @@ function DashboardPageInner() {
   }, [hubId]);
 
   useEffect(() => {
+    setAudit(null);
     if (!auditId || !portal) return;
 
     setAuditLoading(true);
@@ -319,6 +313,11 @@ function DashboardPageInner() {
                 {error}
               </div>
             )}
+            {emailVerificationSent && (
+              <p role="status" className="mb-4 text-sm text-brand">
+                Check your inbox. Confirm your email using the one-time link to finish connecting your account. The link expires in 15 minutes.
+              </p>
+            )}
             <form onSubmit={handleEmailSubmit}>
               <input
                 type="email"
@@ -333,7 +332,7 @@ function DashboardPageInner() {
                 disabled={emailSubmitting}
                 className="w-full bg-brand hover:bg-brand-hover disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-colors"
               >
-                {emailSubmitting ? "Loading..." : "Get My Free Audit"}
+                {emailSubmitting ? "Sending..." : emailVerificationSent ? "Resend Verification Email" : "Verify Email for My Audit"}
               </button>
             </form>
             <p className="text-zinc-600 text-xs mt-4">No spam. We&apos;ll only email you about your audit results.</p>
