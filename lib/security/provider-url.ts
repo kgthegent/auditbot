@@ -26,7 +26,7 @@ export function normalizeProviderBaseUrl(
   }
 
   const hostname = url.hostname.toLowerCase();
-  if (url.protocol !== "https:" || !hostMatches(hostname, allowedHostSuffixes)) {
+  if (url.protocol !== "https:" || url.username || url.password || url.port || !hostMatches(hostname, allowedHostSuffixes)) {
     throw new Error("Unsupported provider URL");
   }
 
@@ -44,6 +44,8 @@ export function providerFetch(
 ) {
   return fetch(input, {
     ...init,
+    // Never forward provider authorization or credentials to a redirect target.
+    redirect: "error",
     signal: init.signal ?? AbortSignal.timeout(timeoutMs),
   });
 }

@@ -53,6 +53,8 @@ export async function GET(req: NextRequest) {
     if (!user || !["starter", "pro"].includes(user.plan)) continue;
 
     try {
+      const checks = await runPlatformAudit(portal);
+      const score = calculateScore(checks);
       // Run audit
       let { data: audit, error: auditError } = await supabaseAdmin
         .from("audits")
@@ -70,13 +72,10 @@ export async function GET(req: NextRequest) {
         auditError = fallback.error;
       }
 
-      if (auditError || !audit) continue;
+      if (auditError || !audit) throw new Error("Failed to create audit");
 
       const platformConfig = getPlatformConfig(portal.platform);
-      const checks = await runPlatformAudit(portal);
-      const score = calculateScore(checks);
-
-      const { error: checkInsertError } = await supabaseAdmin.from("audit_checks").insert(
+      let { error: checkInsertError } = await supabaseAdmin.from("audit_checks").insert(
         checks.map((c) => ({
           audit_id: audit.id,
           check_name: c.checkName,
@@ -91,7 +90,7 @@ export async function GET(req: NextRequest) {
       );
 
       if (checkInsertError?.message?.includes("example_records")) {
-        await supabaseAdmin.from("audit_checks").insert(
+        const fallback = await supabaseAdmin.from("audit_checks").insert(
           checks.map((c) => ({
             audit_id: audit.id,
             check_name: c.checkName,
@@ -103,12 +102,17 @@ export async function GET(req: NextRequest) {
             fix_steps: c.fixSteps,
           }))
         );
+        checkInsertError = fallback.error;
       }
+      if (checkInsertError) throw new Error("Failed to save audit checks");
 
-      await supabaseAdmin
+      const { data: completedAudit, error: completionError } = await supabaseAdmin
         .from("audits")
         .update({ score, completed_at: new Date().toISOString() })
-        .eq("id", audit.id);
+        .eq("id", audit.id)
+        .select("id")
+        .single();
+      if (completionError || !completedAudit) throw new Error("Failed to finalize audit");
 
       // Send weekly digest email
       const dashUrl = `${APP_URL}/dashboard?hub_id=${portal.hub_id}`;
@@ -150,8 +154,8 @@ export async function GET(req: NextRequest) {
 
       await sendEmail(user.email, `Your weekly ${platformConfig.name} score: ${score}/100 — ${portal.portal_name || platformConfig.name}`, html);
       ran++;
-    } catch (err) {
-      console.error(`Failed for portal ${portal.id}:`, err);
+    } catch {
+      console.error(`Audit failed for portal ${portal.id}`);
       failed++;
     }
   }

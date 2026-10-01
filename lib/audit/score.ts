@@ -7,6 +7,7 @@ const SEVERITY_PENALTY: Record<string, number> = {
 };
 
 export function calculateScore(checks: CheckResult[]): number {
+  if (checks.length === 0) throw new Error("Cannot score an empty audit");
   let score = 100;
 
   for (const check of checks) {

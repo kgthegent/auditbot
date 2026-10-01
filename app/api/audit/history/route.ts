@@ -1,3 +1,4 @@
+import { readSession } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/client";
 import { CheckResult } from "@/types";
@@ -5,12 +6,12 @@ import { CheckResult } from "@/types";
 export const dynamic = "force-dynamic";
 
 async function getAuthUser(req: NextRequest) {
-  const email = req.cookies.get("sa_email")?.value;
-  if (!email) return null;
+  const session = readSession(req);
+  if (!session) return null;
   const { data: user } = await supabaseAdmin
     .from("users")
     .select("id")
-    .eq("email", email)
+    .eq("id", session.userId)
     .single();
   return user ?? null;
 }
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const portalId = searchParams.get("portal_id");
-  const hubId = searchParams.get("hub_id") || req.cookies.get("sa_hub_id")?.value;
+  const hubId = searchParams.get("hub_id") || readSession(req)?.hubId;
 
   let portalQuery = supabaseAdmin
     .from("portals")
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest) {
     .from("audits")
     .select("id, score, report_token, created_at, completed_at")
     .eq("portal_id", portal.id)
+    .not("completed_at", "is", null)
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -53,6 +55,7 @@ export async function GET(req: NextRequest) {
       .from("audits")
       .select("id, score, created_at, completed_at")
       .eq("portal_id", portal.id)
+    .not("completed_at", "is", null)
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -88,11 +91,13 @@ export async function GET(req: NextRequest) {
         .from("audit_checks")
         .select("audit_id, status, severity, count")
         .in("audit_id", auditIds);
+      if (fallbackChecks.error) return NextResponse.json({ error: "Failed to load audit summaries" }, { status: 500 });
       checks = (fallbackChecks.data ?? []).map((check) => ({
         ...check,
         workflow_status: "open",
       })) as typeof checks;
     } else {
+      if (checksResult.error) return NextResponse.json({ error: "Failed to load audit summaries" }, { status: 500 });
       checks = (checksResult.data ?? []) as typeof checks;
     }
   }

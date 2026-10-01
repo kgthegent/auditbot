@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readSession } from "@/lib/auth/session";
+import { IncompleteAuditError } from "@/lib/audit/completeness";
 import { randomBytes } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase/client";
 import { runPlatformAudit } from "@/lib/audit/runners";
@@ -46,12 +48,12 @@ function mapCheckRow(row: {
 }
 
 async function getAuthUser(req: NextRequest) {
-  const email = req.cookies.get("sa_email")?.value;
-  if (!email) return null;
+  const session = readSession(req);
+  if (!session) return null;
   const { data: user } = await supabaseAdmin
     .from("users")
     .select("id")
-    .eq("email", email)
+    .eq("id", session.userId)
     .single();
   return user ?? null;
 }
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
     const requestedHubId =
       typeof hub_id === "string" && hub_id.trim()
         ? hub_id.trim()
-        : request.cookies.get("sa_hub_id")?.value;
+        : readSession(request)?.hubId;
 
     if (!portal_id) {
       return NextResponse.json({ error: "portal_id is required" }, { status: 400 });
@@ -88,18 +90,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Portal not found" }, { status: 404 });
     }
 
+    // Only persist an audit after every required check completed.
+    const checks = await runPlatformAudit(portal);
+    const score = calculateScore(checks);
+
     // Create audit record
     const reportToken = createReportToken();
     let { data: audit, error: auditError } = await supabaseAdmin
       .from("audits")
-      .insert({ portal_id, score: 0, report_token: reportToken })
+      .insert({ portal_id: portal.id, score: 0, report_token: reportToken })
       .select()
       .single();
 
     if (auditError?.message?.includes("report_token")) {
       const fallback = await supabaseAdmin
         .from("audits")
-        .insert({ portal_id, score: 0 })
+        .insert({ portal_id: portal.id, score: 0 })
         .select()
         .single();
       audit = fallback.data ? { ...fallback.data, report_token: null } : null;
@@ -109,10 +115,6 @@ export async function POST(request: NextRequest) {
     if (auditError || !audit) {
       return NextResponse.json({ error: "Failed to create audit" }, { status: 500 });
     }
-
-    const checks = await runPlatformAudit(portal);
-
-    const score = calculateScore(checks);
 
     // Save check results
     const checkRows = checks.map((check) => ({
@@ -161,15 +163,20 @@ export async function POST(request: NextRequest) {
       checksError = fallback.error;
     }
 
-    if (checksError || !savedChecks) {
+    if (checksError || !savedChecks || savedChecks.length !== checks.length) {
       return NextResponse.json({ error: "Failed to save audit checks" }, { status: 500 });
     }
 
     // Update audit with score and completion time
-    await supabaseAdmin
+    const { data: completedAudit, error: completionError } = await supabaseAdmin
       .from("audits")
       .update({ score, completed_at: new Date().toISOString() })
-      .eq("id", audit.id);
+      .eq("id", audit.id)
+      .select("id")
+      .single();
+    if (completionError || !completedAudit) {
+      return NextResponse.json({ error: "Failed to finalize audit. No completed report was published." }, { status: 500 });
+    }
 
     return NextResponse.json({
       audit_id: audit.id,
@@ -178,7 +185,10 @@ export async function POST(request: NextRequest) {
       checks: savedChecks.map(mapCheckRow),
     });
   } catch (error) {
-    console.error("Audit run error:", error);
+    if (error instanceof IncompleteAuditError) {
+      return NextResponse.json({ error: error.message, status: "incomplete", score: null, failed_checks: error.failedChecks }, { status: 502 });
+    }
+    console.error("Audit run failed");
     return NextResponse.json(
       { error: "Audit failed. Check your CRM connection." },
       { status: 500 }

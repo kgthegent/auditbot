@@ -1,9 +1,14 @@
+import { getConnectionUser } from "@/lib/auth/connection-user";
+import { hasValidOAuthState, setOAuthState } from "@/lib/auth/oauth-state";
 import { NextRequest, NextResponse } from "next/server";
-import { setSessionCookies } from "@/lib/auth/session";
+import { assertSessionConfigured, setSessionCookies } from "@/lib/auth/session";
 import { exchangeCode, getPortalInfo } from "@/lib/hubspot/oauth";
 import { supabaseAdmin } from "@/lib/supabase/client";
 
 export async function GET(request: NextRequest) {
+  if (!hasValidOAuthState(request, "hubspot_oauth_state")) {
+    return NextResponse.redirect(new URL("/connect?error=invalid_state", request.url));
+  }
   const code = request.nextUrl.searchParams.get("code");
 
   if (!code) {
@@ -13,24 +18,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    assertSessionConfigured();
     const tokens = await exchangeCode(code);
     const portalInfo = await getPortalInfo(tokens.access_token);
 
     const placeholderEmail = `hubspot-${portalInfo.hub_id}@placeholder.local`;
 
-    // Upsert user (using a placeholder email until we capture the real email)
-    const { data: user, error: userError } = await supabaseAdmin
-      .from("users")
-      .upsert(
-        { email: placeholderEmail },
-        { onConflict: "email" }
-      )
-      .select()
-      .single();
-
-    if (userError || !user) {
-      throw new Error(`Failed to upsert user: ${userError?.message}`);
-    }
+    const user = await getConnectionUser(request, placeholderEmail);
 
     // Upsert portal
     const { error: portalError } = await supabaseAdmin
@@ -53,7 +47,8 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.redirect(
       new URL(`/dashboard?hub_id=${portalInfo.hub_id}`, request.url)
     );
-    setSessionCookies(response, placeholderEmail, portalInfo.hub_id);
+    setSessionCookies(response, { userId: user.id, email: user.email, hubId: portalInfo.hub_id });
+    setOAuthState(response, "hubspot_oauth_state", "");
     return response;
   } catch (error) {
     console.error("OAuth callback error:", error);

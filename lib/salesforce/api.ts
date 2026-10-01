@@ -1,10 +1,55 @@
 import { supabaseAdmin } from "@/lib/supabase/client";
+import { normalizeProviderBaseUrl, providerFetch } from "@/lib/security/provider-url";
 import { refreshToken } from "./oauth";
 
 interface SOQLResult {
   totalSize: number;
   done: boolean;
   records: Record<string, unknown>[];
+  nextRecordsUrl?: string;
+}
+
+const MAX_QUERY_PAGES = 1_000;
+
+class SalesforceApiError extends Error {
+  constructor(readonly status: number) {
+    // Provider responses may contain customer data; do not include their bodies.
+    super(`Salesforce API request failed (${status})`);
+    this.name = "SalesforceApiError";
+  }
+}
+
+function salesforceBaseUrl(value: string) {
+  return normalizeProviderBaseUrl(value, [".salesforce.com"]);
+}
+
+function parseQueryResult(value: unknown): SOQLResult {
+  if (!value || typeof value !== "object") {
+    throw new Error("Invalid Salesforce query response");
+  }
+  const result = value as SOQLResult;
+  if (
+    !Number.isSafeInteger(result.totalSize) ||
+    result.totalSize < 0 ||
+    typeof result.done !== "boolean" ||
+    !Array.isArray(result.records) ||
+    result.records.some((record) => !record || typeof record !== "object" || Array.isArray(record))
+  ) {
+    throw new Error("Invalid Salesforce query response");
+  }
+  return result;
+}
+
+function nextQueryPath(value: unknown): string {
+  // Query locators are relative paths, never arbitrary URLs. Validate before
+  // attaching a bearer token to a pagination request.
+  if (
+    typeof value !== "string" ||
+    !/^\/services\/data\/v\d+\.\d+\/query\/[A-Za-z0-9_-]+$/.test(value)
+  ) {
+    throw new Error("Salesforce query returned an invalid pagination locator");
+  }
+  return value;
 }
 
 export async function getSalesforceInstanceUrl(portalId: string): Promise<string> {
@@ -15,7 +60,7 @@ export async function getSalesforceInstanceUrl(portalId: string): Promise<string
     .single();
 
   if (error || !portal?.instance_url) throw new Error("Salesforce instance URL not found");
-  return portal.instance_url;
+  return salesforceBaseUrl(portal.instance_url);
 }
 
 export function salesforceRecordUrl(
@@ -24,7 +69,7 @@ export function salesforceRecordUrl(
   id: unknown
 ) {
   if (typeof id !== "string" || !id) return undefined;
-  return `${instanceUrl}/lightning/r/${objectApiName}/${id}/view`;
+  return `${salesforceBaseUrl(instanceUrl)}/lightning/r/${encodeURIComponent(objectApiName)}/${encodeURIComponent(id)}/view`;
 }
 
 async function sfQuery(
@@ -32,17 +77,46 @@ async function sfQuery(
   accessToken: string,
   soql: string
 ): Promise<SOQLResult> {
-  const url = `${instanceUrl}/services/data/v59.0/query?q=${encodeURIComponent(soql)}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const baseUrl = salesforceBaseUrl(instanceUrl);
+  let path = `/services/data/v59.0/query?q=${encodeURIComponent(soql)}`;
+  const visited = new Set<string>();
+  const records: Record<string, unknown>[] = [];
+  let totalSize: number | undefined;
+  // COUNT() uses totalSize for the count and returns no record rows.
+  const countOnly = /^\s*SELECT\s+COUNT\(\s*\)\s+FROM\b/i.test(soql);
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Salesforce API error ${res.status}: ${text}`);
+  for (let page = 0; page < MAX_QUERY_PAGES; page++) {
+    if (visited.has(path)) {
+      throw new Error("Salesforce query repeated a pagination locator");
+    }
+    visited.add(path);
+    const res = await providerFetch(`${baseUrl}${path}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      redirect: "error",
+    });
+
+    if (!res.ok) throw new SalesforceApiError(res.status);
+
+    const result = parseQueryResult(await res.json());
+    if (totalSize === undefined) totalSize = result.totalSize;
+    if (result.totalSize !== totalSize) {
+      throw new Error("Salesforce query changed its total during pagination");
+    }
+    records.push(...result.records);
+
+    if (result.done) {
+      if (!countOnly && records.length !== totalSize) {
+        throw new Error("Salesforce query returned an incomplete record set");
+      }
+      return { totalSize, done: true, records };
+    }
+    if (countOnly || result.records.length === 0 || records.length >= totalSize) {
+      throw new Error("Salesforce query returned inconsistent pagination metadata");
+    }
+    path = nextQueryPath(result.nextRecordsUrl);
   }
 
-  return res.json();
+  throw new Error("Salesforce query exceeded the pagination safety limit; audit is incomplete");
 }
 
 export async function runSOQL(
@@ -61,18 +135,21 @@ export async function runSOQL(
     return await sfQuery(portal.instance_url, portal.access_token, query);
   } catch (err) {
     // Auto-refresh on 401
-    if (err instanceof Error && err.message.includes("401")) {
+    if (err instanceof SalesforceApiError && err.status === 401) {
       const refreshed = await refreshToken(portal.refresh_token);
+      const instanceUrl = salesforceBaseUrl(refreshed.instance_url);
 
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from("portals")
         .update({
           access_token: refreshed.access_token,
-          instance_url: refreshed.instance_url,
+          instance_url: instanceUrl,
         })
         .eq("id", portalId);
+      if (updateError) throw new Error("Unable to save refreshed Salesforce credentials");
 
-      return sfQuery(refreshed.instance_url, refreshed.access_token, query);
+      // Restart from the first page, so records from two queries cannot mix.
+      return sfQuery(instanceUrl, refreshed.access_token, query);
     }
     throw err;
   }

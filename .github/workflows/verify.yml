@@ -1,0 +1,30 @@
+name: Verify
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SUPABASE_URL: https://fixture.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: fixture-anon
+      SUPABASE_SERVICE_ROLE_KEY: fixture-service
+      STRIPE_SECRET_KEY: sk_test_fixture
+      SESSION_SECRET: synthetic-build-fixture-secret-not-for-deployment
+      HUBSPOT_CLIENT_ID: fixture
+      HUBSPOT_CLIENT_SECRET: fixture
+      HUBSPOT_REDIRECT_URI: https://audit.example/api/auth/hubspot/callback
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build

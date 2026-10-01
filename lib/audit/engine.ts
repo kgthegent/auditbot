@@ -1,5 +1,7 @@
 import { CheckResult, ExampleRecord } from "@/types";
 
+import { IncompleteAuditError, runChecks } from "./completeness";
+
 const HUBSPOT_API = "https://api.hubapi.com";
 const SAMPLE_PROPERTIES = [
   "firstname",
@@ -17,17 +19,20 @@ async function hubspotGet(path: string, accessToken: string, params?: Record<str
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   }
   const res = await fetch(url.toString(), {
+    signal: AbortSignal.timeout(30000),
+    cache: "no-store",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HubSpot API error ${res.status}: ${text}`);
+    throw new Error(`HubSpot API error ${res.status}`);
   }
   return res.json();
 }
 
 async function getTotalContacts(accessToken: string): Promise<number> {
   const res = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
+    signal: AbortSignal.timeout(30000),
+    cache: "no-store",
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -35,13 +40,13 @@ async function getTotalContacts(accessToken: string): Promise<number> {
     },
     body: JSON.stringify({ filterGroups: [], limit: 1 }),
   });
-  if (!res.ok) return 0;
+  if (!res.ok) throw new Error(`HubSpot contact total failed (${res.status})`);
   const data = await res.json();
-  return data.total ?? 0;
+  return requireTotal(data.total);
 }
 
 async function getHubId(accessToken: string): Promise<string> {
-  const res = await fetch(`${HUBSPOT_API}/oauth/v1/access-tokens/${accessToken}`);
+  const res = await fetch(`${HUBSPOT_API}/oauth/v1/access-tokens/${accessToken}`, { signal: AbortSignal.timeout(30000), cache: "no-store" });
   if (!res.ok) return "";
   const data = await res.json();
   return String(data.hub_id ?? "");
@@ -52,6 +57,8 @@ async function hubspotContactSearch(
   body: Record<string, unknown>
 ) {
   const res = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
+    signal: AbortSignal.timeout(30000),
+    cache: "no-store",
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -65,7 +72,22 @@ async function hubspotContactSearch(
   });
 
   if (!res.ok) throw new Error("HubSpot contact search failed");
-  return res.json();
+  const data = await res.json();
+  requireTotal(data.total);
+  if (!Array.isArray(data.results)) throw new Error("Invalid HubSpot search response");
+  return data;
+}
+
+function requireTotal(value: unknown): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error("Invalid HubSpot contact total");
+  }
+  return value;
+}
+
+function affectedPercentage(count: number, total: number): number {
+  if (count > total) throw new Error("Contact totals changed during audit; retry for a consistent result");
+  return total > 0 ? (count / total) * 100 : 0;
 }
 
 function formatDate(value?: string) {
@@ -107,32 +129,47 @@ function toStatus(percentage: number, warnThreshold: number, failThreshold: numb
 }
 
 export async function checkDuplicateContacts(accessToken: string, total: number, hubId: string): Promise<CheckResult> {
-  // Search for contacts grouped by email to find duplicates
-  const data = await hubspotGet("/crm/v3/objects/contacts", accessToken, {
-    limit: "100",
-    properties: SAMPLE_PROPERTIES.join(","),
-  });
+  // Follow the objects cursor rather than treating page one as a portal scan.
+  const records: { id: string; properties: Record<string, string | undefined> }[] = [];
+  const cursors = new Set<string>();
+  const ids = new Set<string>();
+  let after: string | undefined;
+  do {
+    const data = await hubspotGet("/crm/v3/objects/contacts", accessToken, {
+      limit: "100", properties: SAMPLE_PROPERTIES.join(","), ...(after ? { after } : {}),
+    });
+    if (!Array.isArray(data.results)) throw new Error("Invalid HubSpot contact page");
+    for (const record of data.results) {
+      if (!record || typeof record.id !== "string" || !record.properties || ids.has(record.id)) {
+        throw new Error("Invalid or repeated HubSpot contact record");
+      }
+      ids.add(record.id);
+      records.push(record);
+    }
+    const next = data.paging?.next;
+    if (next && data.results.length === 0) throw new Error("Empty HubSpot page has a continuation cursor");
+    if (next && (next.after === undefined || next.after === null)) throw new Error("Invalid HubSpot cursor");
+    after = next ? String(next.after) : undefined;
+    if (after !== undefined) {
+      if (!after || cursors.has(after)) throw new Error("Repeated HubSpot cursor");
+      cursors.add(after);
+    }
+    // Fail closed rather than publish a partial score if execution would be unbounded.
+    if (records.length > 100000) throw new Error("HubSpot duplicate scan exceeds 100000 contacts");
+  } while (after !== undefined);
 
-  const records = (data.results || []) as {
-    id: string;
-    properties: Record<string, string | undefined>;
-  }[];
-  const emails = records
-    .map((c) => c.properties.email?.toLowerCase())
-    .filter(Boolean) as string[];
-
-  const seen = new Set<string>();
-  const dupes = new Set<string>();
-  for (const email of emails) {
-    if (seen.has(email)) dupes.add(email);
-    seen.add(email);
+  const frequencies = new Map<string, number>();
+  for (const record of records) {
+    const email = record.properties.email?.trim().toLowerCase();
+    if (email) frequencies.set(email, (frequencies.get(email) ?? 0) + 1);
   }
-
-  const count = dupes.size;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const dupes = new Set(Array.from(frequencies).filter(([, count]) => count > 1).map(([email]) => email));
+  // Count affected records, not email groups divided by a record denominator.
+  const count = Array.from(dupes).reduce((sum, email) => sum + frequencies.get(email)!, 0);
+  const scanned = records.length;
+  const percentage = scanned > 0 ? (count / scanned) * 100 : 0;
   const exampleRecords = mapContactExamples(
-    hubId,
-    records.filter((record) => dupes.has(record.properties.email?.toLowerCase() ?? ""))
+    hubId, records.filter((record) => dupes.has(record.properties.email?.trim().toLowerCase() ?? ""))
   );
 
   return {
@@ -141,7 +178,7 @@ export async function checkDuplicateContacts(accessToken: string, total: number,
     count,
     percentage: Math.round(percentage * 100) / 100,
     status: toStatus(percentage, 2, 5),
-    description: `Found ${count} duplicate email addresses across ${total} contacts.`,
+    description: `Found ${count} contacts sharing ${dupes.size} duplicate email addresses across ${scanned} scanned contacts (search total at start: ${total}).`,
     fixSteps: [
       "Export duplicate contacts and review manually",
       "Use HubSpot's merge tool to combine duplicate records",
@@ -169,7 +206,7 @@ export async function checkMissingOwner(accessToken: string, total: number, hubI
   });
 
   const count = searchData.total ?? 0;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const percentage = affectedPercentage(count, total);
 
   return {
     checkName: "Missing Contact Owner",
@@ -202,7 +239,7 @@ export async function checkMissingLifecycleStage(accessToken: string, total: num
   });
 
   const count = searchData.total ?? 0;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const percentage = affectedPercentage(count, total);
 
   return {
     checkName: "Missing Lifecycle Stage",
@@ -245,6 +282,8 @@ export async function checkUnassignedNewLeads(accessToken: string, _total: numbe
 
   // Get total new contacts in last 7 days
   const totalNewRes = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
+    signal: AbortSignal.timeout(30000),
+    cache: "no-store",
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -266,11 +305,11 @@ export async function checkUnassignedNewLeads(accessToken: string, _total: numbe
     }),
   });
 
-  const totalNewData = totalNewRes.ok ? await totalNewRes.json() : { total: 0 };
-  const totalNew = totalNewData.total ?? 0;
+  if (!totalNewRes.ok) throw new Error("HubSpot new-contact total failed");
+  const totalNewData = await totalNewRes.json();
+  const totalNew = requireTotal(totalNewData.total);
   const count = searchData.total ?? 0;
-  // If totalNew is 0 but count > 0, treat as 100% affected
-  const percentage = totalNew > 0 ? (count / totalNew) * 100 : count > 0 ? 100 : 0;
+  const percentage = affectedPercentage(count, totalNew);
 
   return {
     checkName: "Unassigned New Leads (7d)",
@@ -312,7 +351,7 @@ export async function checkUTMGaps(accessToken: string, total: number, hubId: st
   });
 
   const count = searchData.total ?? 0;
-  const percentage = total > 0 ? (count / total) * 100 : 0;
+  const percentage = affectedPercentage(count, total);
 
   return {
     checkName: "UTM / Source Gaps",
@@ -331,19 +370,19 @@ export async function checkUTMGaps(accessToken: string, total: number, hubId: st
 }
 
 export async function runAllChecks(accessToken: string): Promise<CheckResult[]> {
-  // Fetch total once upfront and inject into checks that need it
-  const total = await getTotalContacts(accessToken);
-  const hubId = await getHubId(accessToken);
-
-  const results = await Promise.allSettled([
-    checkDuplicateContacts(accessToken, total, hubId),
-    checkMissingOwner(accessToken, total, hubId),
-    checkMissingLifecycleStage(accessToken, total, hubId),
-    checkUnassignedNewLeads(accessToken, total, hubId),
-    checkUTMGaps(accessToken, total, hubId),
+  let total: number;
+  try {
+    total = await getTotalContacts(accessToken);
+  } catch {
+    throw new IncompleteAuditError(["Contact total"]);
+  }
+  // Record links are optional metadata, not an audit prerequisite.
+  const hubId = await getHubId(accessToken).catch(() => "");
+  return runChecks([
+    { name: "Duplicate Contacts", run: () => checkDuplicateContacts(accessToken, total, hubId) },
+    { name: "Missing Contact Owner", run: () => checkMissingOwner(accessToken, total, hubId) },
+    { name: "Missing Lifecycle Stage", run: () => checkMissingLifecycleStage(accessToken, total, hubId) },
+    { name: "Unassigned New Leads (7d)", run: () => checkUnassignedNewLeads(accessToken, total, hubId) },
+    { name: "UTM / Source Gaps", run: () => checkUTMGaps(accessToken, total, hubId) },
   ]);
-
-  return results
-    .filter((r): r is PromiseFulfilledResult<CheckResult> => r.status === "fulfilled")
-    .map((r) => r.value);
 }

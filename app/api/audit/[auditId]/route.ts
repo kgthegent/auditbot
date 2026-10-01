@@ -1,3 +1,4 @@
+import { readSession } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/client";
 import { CheckResult, ExampleRecord } from "@/types";
@@ -5,12 +6,12 @@ import { CheckResult, ExampleRecord } from "@/types";
 export const dynamic = "force-dynamic";
 
 async function getAuthUser(req: NextRequest) {
-  const email = req.cookies.get("sa_email")?.value;
-  if (!email) return null;
+  const session = readSession(req);
+  if (!session) return null;
   const { data: user } = await supabaseAdmin
     .from("users")
     .select("id")
-    .eq("email", email)
+    .eq("id", session.userId)
     .single();
   return user ?? null;
 }
@@ -43,6 +44,8 @@ export async function GET(
     .single();
 
   if (!portal) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!audit.completed_at) return NextResponse.json({ error: "Audit incomplete. No health score is available." }, { status: 409 });
 
   let { data: checks, error: checksError } = await supabaseAdmin
     .from("audit_checks")
